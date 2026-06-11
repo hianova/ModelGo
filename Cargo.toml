@@ -1,0 +1,26 @@
+[package]
+name = "model_go"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+union_code = { path = "../UnionCode" }
+vec101 = { path = "../vec101" }
+cdDB = { path = "../cdDB" }
+memmap2 = "0.9.10"
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+tokio = { version = "1.37", features = ["full", "rt-multi-thread"] }
+dualcache-ff = "0.4.1"
+reqwest = { version = "0.12", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+hashbrown = "0.14.5"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3.8"
+
+[[bench]]
+name = "latency"
+harness = false
