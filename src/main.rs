@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use model_go::{
     HybridRouter, IntentRouter, JitCompiler, SpatialIntentEngine, BoundingBox, 
     ZeroCopyMmapReader, System2Verifier, OsDispatch, SelfEvolvingLoop,
-    BenchmarkSuite
+    BenchmarkSuite, FftChaosAnalyzer
 };
 
 #[derive(Parser)]
@@ -54,6 +54,16 @@ enum Commands {
     Macro,
     /// Run the brutal micro-latency physical benchmarks
     Benchmark,
+    /// Run FFT chaos analysis on stock market data
+    FftChaos {
+        #[arg(short, long)]
+        file: Option<String>,
+    },
+    /// Run sliding window FFT backtest natively and output mark array
+    FftBacktest {
+        #[arg(short, long)]
+        file: String,
+    },
 }
 
 #[tokio::main]
@@ -117,7 +127,122 @@ async fn main() -> anyhow::Result<()> {
         Commands::Benchmark => {
             BenchmarkSuite::run_all()?;
         }
-    }
+        Commands::FftChaos { file } => {
+            println!("Starting FFT Chaos Analysis...");
+            let mut analyzer = FftChaosAnalyzer::new();
+            
+            let data = if let Some(path) = file {
+                println!("Reading data from {}", path);
+                let content = std::fs::read_to_string(path)?;
+                if path.ends_with(".csv") {
+                    let mut values = Vec::new();
+                    // Assuming format: Date;Open;High;Low;Close;Volume
+                    // or standard comma separated if semicolon not found
+                    for line in content.lines().skip(1) {
+                        let delimiter = if line.contains(';') { ';' } else { ',' };
+                        let parts: Vec<&str> = line.split(delimiter).collect();
+                        // Try to find Close column, assuming it's around index 4
+                        if parts.len() >= 5 {
+                            if let Ok(val) = parts[4].parse::<f64>() {
+                                values.push(val);
+                            }
+                        }
+                    }
+                    values
+                } else {
+                    let values: Vec<f64> = serde_json::from_str(&content)?;
+                    values
+                }
+            } else {
+                println!("No file provided. Generating mock stock market data (Random Walk + Sine + White Noise)...");
+                let mut mock_data = Vec::with_capacity(512);
+                let mut current_price = 100.0;
+                let mut seed = 1337;
+                for i in 0..512 {
+                    // pseudo random noise
+                    seed ^= seed << 13;
+                    seed ^= seed >> 17;
+                    seed ^= seed << 5;
+                    let noise = (seed as f64) / (u32::MAX as f64) * 2.0 - 1.0;
+                    
+                    // drift + cyclic + noise
+                    current_price += 0.05 + 0.5 * ((i as f64) / 10.0).sin() + noise;
+                    mock_data.push(current_price);
+                }
+                mock_data
+            };
+            
+            println!("Analyzing {} data points...", data.len());
+            if let Some(metrics) = analyzer.analyze_time_series(&data) {
+                println!("\n--- FFT Chaos Analysis Results ---");
+                println!("Spectral Entropy: {:.4} (0.0 = Predictable Cyclic, 1.0 = Chaotic White Noise)", metrics.spectral_entropy);
+                println!("Dominant Frequency Index: {}", metrics.dominant_frequency_index);
+                println!("Dominant Power Ratio: {:.4}", metrics.dominant_power_ratio);
+                
+                if metrics.spectral_entropy > 0.7 {
+                    println!("Conclusion: Highly Chaotic (Market is noisy and unpredictable)");
+                } else if metrics.spectral_entropy > 0.4 {
+                    println!("Conclusion: Moderately Chaotic (Mixed trends and noise)");
+                } else {
+                    println!("Conclusion: Structured (Market shows clear cyclical patterns)");
+                }
+            } else {
+                eprintln!("Failed to analyze data (not enough data points).");
+            }
+        }
+        Commands::FftBacktest { file } => {
+            let content = std::fs::read_to_string(&file)?;
+            // Attempt to parse as JSON array of f64/strings
+            let parsed: Vec<serde_json::Value> = serde_json::from_str(&content)?;
+            let mut prices: Vec<f64> = Vec::new();
+            for v in parsed {
+                if let Some(n) = v.as_f64() {
+                    prices.push(n);
+                } else if let Some(s) = v.as_str() {
+                    prices.push(s.parse().unwrap_or(0.0));
+                }
+            }
 
+            let mut analyzer = FftChaosAnalyzer::new();
+            let window_size = 256;
+            let mut holding = false;
+            let mut buy_idx = 0;
+            let mut mark: Vec<usize> = Vec::new();
+
+            if prices.len() >= window_size {
+                for i in window_size..prices.len() {
+                    let window = &prices[i - window_size..i];
+                    if let Some(metrics) = analyzer.analyze_time_series(window) {
+                        let ma: f64 = window.iter().sum::<f64>() / window_size as f64;
+                        let current_price = prices[i];
+                        
+                        if !holding {
+                            // Inverted Entry: Market turns chaotic or Downtrend
+                            if metrics.spectral_entropy > 0.45 || current_price < ma {
+                                holding = true;
+                                buy_idx = i;
+                            }
+                        } else {
+                            // Inverted Exit: Highly structured market & Uptrend
+                            if metrics.spectral_entropy < 0.35 && current_price > ma {
+                                holding = false;
+                                mark.push(buy_idx);
+                                mark.push(i);
+                            }
+                        }
+                    }
+                }
+                
+                // Close any open positions at the end
+                if holding {
+                    mark.push(buy_idx);
+                    mark.push(prices.len() - 1);
+                }
+            }
+            // Just print the JSON array of marks to stdout (stockgo JS script will capture it)
+            println!("{}", serde_json::to_string(&mark)?);
+        }
+    }
+    
     Ok(())
 }

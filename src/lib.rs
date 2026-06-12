@@ -11,6 +11,7 @@ pub mod process_intent;
 pub mod chaos_state;
 pub mod ffi;
 pub mod biology_router;
+pub mod fft_chaos;
 
 
 pub use mmap_reader::ZeroCopyMmapReader;
@@ -23,3 +24,4 @@ pub use self_evolving_loop::SelfEvolvingLoop;
 pub use os_dispatch::OsDispatch;
 pub use benchmarks::BenchmarkSuite;
 pub use process_intent::process_intent;
+pub use fft_chaos::FftChaosAnalyzer;
