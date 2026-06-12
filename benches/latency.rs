@@ -23,15 +23,38 @@ fn bench_memory_mesh_cache(c: &mut Criterion) {
     });
 }
 
-fn bench_router_fast_path(c: &mut Criterion) {
-    let router = HybridRouter::new();
-    // This will hit the fallback path since static cache is empty
-    c.bench_function("hybrid_router_miss", |b| {
+use model_go::chaos_state::{ChaosState, MicroTweak, RngState, step_forward_nd};
+
+fn bench_chaos_learning_step(c: &mut Criterion) {
+    let mut rng = RngState::new(0x1234);
+    let mut state = ChaosState::<10, 1>::new([0.0]);
+    let tweak = MicroTweak {
+        s_exponent: 1.5,
+        max_elements: 1000,
+    };
+
+    c.bench_function("chaos_learning_step", |b| {
         b.iter(|| {
-            let _ = router.route(black_box(b"unknown"));
+            // Benchmark the O(N) pure math projection (no allocations)
+            state = step_forward_nd(black_box(&state), black_box(&tweak), black_box(&mut rng));
         })
     });
 }
 
-criterion_group!(benches, bench_rejection_sampling, bench_memory_mesh_cache, bench_router_fast_path);
+// NOTE: bench_router_fast_path is intentionally excluded from the criterion group.
+// HybridRouter::route() falls through to Vec101FallbackEngine which spawns a Python
+// subprocess at ../vec101/. This path doesn't exist in most environments, causing
+// the benchmark to hang indefinitely. To benchmark the full router, ensure the
+// vec101 Python bridge is available and uncomment the function below.
+//
+// fn bench_router_fast_path(c: &mut Criterion) {
+//     let router = HybridRouter::new();
+//     c.bench_function("hybrid_router_miss", |b| {
+//         b.iter(|| {
+//             let _ = router.route(black_box(b"unknown"));
+//         })
+//     });
+// }
+
+criterion_group!(benches, bench_rejection_sampling, bench_memory_mesh_cache, bench_chaos_learning_step);
 criterion_main!(benches);

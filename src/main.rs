@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use model_go::{
     HybridRouter, IntentRouter, JitCompiler, SpatialIntentEngine, BoundingBox, 
-    ZeroCopyMmapReader, System2Verifier, OsDispatch, SelfEvolvingLoop, MemoryMesh,
+    ZeroCopyMmapReader, System2Verifier, OsDispatch, SelfEvolvingLoop,
     BenchmarkSuite
 };
 
@@ -72,8 +72,8 @@ async fn main() -> anyhow::Result<()> {
             let router = HybridRouter::new();
             
             match router.route(text.as_bytes()) {
-                Ok(intent) => {
-                    println!("[Router Success] Resolved to OpCode: 0x{:02X}, PayloadID: 0x{:04X}", intent.opcode, intent.payload_id);
+                Ok((intent, parameters)) => {
+                    println!("[Router Success] Resolved to OpCode: 0x{:02X}, PayloadID: 0x{:04X}, Params: {:?}", intent.opcode, intent.payload_id, parameters);
                 }
                 Err(e) => {
                     eprintln!("[Router Error] Failed to route intent. Error code: 0x{:02X}", e);
@@ -81,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::Jit { prompt } => {
-            JitCompiler::compile_and_execute(prompt)?;
+            JitCompiler::compile_and_execute(prompt, None)?;
         }
         Commands::Spatial { x, y, w, h, annotation } => {
             let bbox = BoundingBox { x: *x, y: *y, width: *w, height: *h };

@@ -31,6 +31,9 @@ impl BenchmarkSuite {
         temp_path.push("dummy_vec101_model.bin");
         fs::write(&temp_path, vec![0u8; 1024 * 1024 * 50])?; 
 
+        // Note: Writing a file and immediately memory-mapping it means the file is still in the OS page cache. 
+        // This benchmark actually measures the "warm page cache mmap latency" rather than a true cold start.
+        // To measure a true cold start, we would need to drop the page cache (`purge` on macOS, `echo 3 > /proc/sys/vm/drop_caches` on Linux).
         let start = Instant::now();
         let _reader = ZeroCopyMmapReader::new(&temp_path)?;
         let elapsed = start.elapsed();
@@ -86,7 +89,8 @@ impl BenchmarkSuite {
 
         println!("  => 2nd Run (DualCacheFF State Machine Hit): {:.6} ms (Requirement: < 1ms)", elapsed_hit.as_secs_f64() * 1000.0);
         
-        assert!(elapsed_hit.as_millis() < 1, "DualCacheFF hit exceeded 1ms! Took {:?}", elapsed_hit);
+        // Use as_micros() instead of as_millis() since as_millis() truncates to 0 for sub-ms latencies, making `as_millis() < 1` always true.
+        assert!(elapsed_hit.as_micros() < 1000, "DualCacheFF hit exceeded 1ms! Took {:?}", elapsed_hit);
         
         println!("  [PASS] Self-learning bypasses the LLM neural network entirely via O(1) logic gates.\n");
         Ok(())
@@ -108,7 +112,8 @@ impl BenchmarkSuite {
         // execute a minimal cdDB operation (which represents resolving the mmap pointer).
         // Since MemoryMesh doesn't expose a read API directly right now, we measure the insertion time
         // which includes the WAL append and is often the upper bound for a read.
-        mesh.persist_workflow(43, "Small context swap");
+        // We use the full 100K context payload to properly test the "100K Context Injection" claim.
+        mesh.persist_workflow(43, &context_payload);
         let elapsed = start.elapsed();
 
         println!("  => cdDB KV State Prefill/WAL Sync overhead");

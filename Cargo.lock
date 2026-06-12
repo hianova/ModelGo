@@ -1010,6 +1010,7 @@ dependencies = [
  "criterion",
  "dualcache-ff",
  "hashbrown 0.14.5",
+ "libm",
  "memmap2",
  "reqwest",
  "serde",
