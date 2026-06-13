@@ -65,10 +65,9 @@ impl JitCompiler {
                 
                 // Persistence: Store the successful script in MemoryMesh (cdDB)
                 println!("[JIT Compiler] Script execution SUCCESS. Persisting workflow to MemoryMesh cdDB Tiered Storage...");
-                if let Ok(mesh) = crate::memory_mesh::MemoryMesh::new() {
-                    let workflow_id = (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() % 10000) as u32;
-                    mesh.persist_workflow(workflow_id, &script_content);
-                }
+                let mesh = crate::memory_mesh::MemoryMesh::global();
+                let workflow_id = (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() % 10000) as u32;
+                mesh.persist_workflow(workflow_id, &script_content);
                 
                 return Ok(());
             } else {

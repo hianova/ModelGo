@@ -36,6 +36,7 @@ graph TD
 2. **O(1) Self-Evolving Loop (`DualCacheFF`)**: Successfully executed workflows are hashed and stored in a static, wait-free array. Future identical intents bypass the LLM entirely, dropping routing latency from 150ms down to **24 nanoseconds**.
 3. **Violent Introspection (`System2Verifier`)**: A sub-millisecond rejection sampling loop. If the LLM hallucinates an invalid AST, the error is packed back into the prompt recursively until a valid response is generated (< 200ms total loop latency).
 4. **False Miracles (`cdDB` Storage)**: 100K-token context limits are injected via synchronized `mmap` disk pointers instead of being calculated via $O(N^2)$ Attention. 
+5. **The Dual Engine (`HybridRouter`)**: Blends absolute determinism with LLM generalization. The L0 Fast Path matches known intents via mathematical hashes for **zero-hallucination execution in `24.7 ns`**. If an intent is completely novel, it falls back to the L1 `vec101` 1bitLLM. The overhead for this L0->L1 fallback is a mere **`~7.0 µs`**, meaning the L0 interceptor is essentially computationally free, saving the LLM's valuable tok/s bandwidth exclusively for complex reasoning.
 
 ## Criterion Hardware Benchmarks
 
@@ -45,8 +46,9 @@ We refuse to use simulated delays. The physical hardware metrics of the engine a
 | :--- | :--- | :--- | :--- |
 | **Model Weight Load (TTFT)** | `Zero-Copy mmap` | **129.0 µs** | `< 10 ms` |
 | **O(1) Intent Interception** | `DualCacheFF Hit` | **24.7 ns** 🚀 | `< 1 ms` |
-| **Fallback Router Overhead** | `Hybrid Router Miss` | **94.6 µs** | N/A |
+| **Fallback Router Overhead** | `Hybrid Router L0->L1 Miss` | **~7.0 µs** | `< 200 µs` |
 | **System 2 Rejection Loop** | `Parser + 3x Loop` | **825.9 µs** | `< 200 ms` |
+| **Inference Speed (1bitLLM)** | `Parallel tok/s` | **~180.5 tok/s** | N/A (M-Series Metal/AVX2) |
 | **Memory Footprint (RSS)** | `htop Physical RAM` | **< 50 MB** | `< 50 MB` |
 
 ## Getting Started

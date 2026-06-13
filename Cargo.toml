@@ -20,6 +20,7 @@ UnionTranslator = { path = "../uniontranslator" }
 lazy_static = "1.4.0"
 rustfft = "6.2.0"
 vec101 = { path = "../vec101", features = ["std"] }
+rkyv = { version = "0.7.42", features = ["validation"] }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

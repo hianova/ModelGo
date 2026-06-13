@@ -25,7 +25,6 @@ impl OsDispatch {
 
     /// Generates a large Markdown document using the CanvasDiffusion Parallel approach via vec101 Engine.
     pub fn markdown_map_reduce_generation(topic: &str) -> Result<()> {
-        use vec101::engine::Vec101Engine;
         
         println!("\n[OS Dispatch] Initiating Zero-Copy Markdown CanvasDiffusion for topic: '{}'", topic);
 
@@ -34,16 +33,6 @@ impl OsDispatch {
         println!("[CanvasDiffusion] Step 1: Generating Skeleton Draft...");
         let outline = vec!["1. Introduction", "2. Core Architecture", "3. OS Integration", "4. Conclusion"];
         println!("[CanvasDiffusion] Outline generated: {:?}", outline);
-
-        // Initialize the native vec101 engine
-        println!("[CanvasDiffusion] Booting vec101 Zero-Copy Engine...");
-        let mut engine = Vec101Engine::new("../vec101/tools/bitnet_compiled.rkyv")
-            .unwrap_or_else(|e| {
-                println!("[Warning] Could not load rkyv model ({}). Running in dry-run mode.", e);
-                // We fallback to a dummy engine if the model file is not present during testing.
-                // In a proper error-handled system, we'd propagate this error.
-                Vec101Engine::new("").unwrap() // this will fail, let's just propagate
-            });
 
         // Step 2: Split into sub-prompts (Map)
         println!("[CanvasDiffusion] Step 2: Slicing outline into parallel prompts...");
@@ -54,9 +43,15 @@ impl OsDispatch {
         }
 
         // Step 3: Batch generation (Native vec101 Batch Mode)
-        println!("[CanvasDiffusion] Step 3: Dispatching {} prompts to vec101 Batch Mode...", prompts.len());
+        println!("[CanvasDiffusion] Step 3: Dispatching {} prompts to vec101 Batch Mode via global Fallback Engine...", prompts.len());
         
-        let results = engine.generate_parallel(&prompts);
+        // Use the global, already-loaded engine to save massive memory footprint overhead.
+        let results = crate::router::get_fallback_engine()
+            .generate_parallel(&prompts)
+            .unwrap_or_else(|e| {
+                println!("[Warning] Global engine generation failed: {}", e);
+                vec!["(Dry-run content generated due to engine failure)".to_string(); prompts.len()]
+            });
 
         // Step 4: Concatenate (Reduce)
         println!("[CanvasDiffusion] Step 4: Batch generation complete. Reducing parts into final Markdown...\n");

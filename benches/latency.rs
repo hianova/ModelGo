@@ -41,20 +41,19 @@ fn bench_chaos_learning_step(c: &mut Criterion) {
     });
 }
 
-// NOTE: bench_router_fast_path is intentionally excluded from the criterion group.
-// HybridRouter::route() falls through to Vec101FallbackEngine which spawns a Python
-// subprocess at ../vec101/. This path doesn't exist in most environments, causing
-// the benchmark to hang indefinitely. To benchmark the full router, ensure the
-// vec101 Python bridge is available and uncomment the function below.
+// NOTE: bench_router_fast_path used to be excluded because the HybridRouter
+// fell through to Vec101FallbackEngine which spawned a Python subprocess.
+// Since we have migrated to the native Rust vec101 backend, this is now safe
+// and extremely fast to benchmark.
 //
-// fn bench_router_fast_path(c: &mut Criterion) {
-//     let router = HybridRouter::new();
-//     c.bench_function("hybrid_router_miss", |b| {
-//         b.iter(|| {
-//             let _ = router.route(black_box(b"unknown"));
-//         })
-//     });
-// }
+fn bench_router_fast_path(c: &mut Criterion) {
+    let router = HybridRouter::new();
+    c.bench_function("hybrid_router_miss", |b| {
+        b.iter(|| {
+            let _ = router.route(black_box(b"unknown"));
+        })
+    });
+}
 
-criterion_group!(benches, bench_rejection_sampling, bench_memory_mesh_cache, bench_chaos_learning_step);
+criterion_group!(benches, bench_rejection_sampling, bench_memory_mesh_cache, bench_chaos_learning_step, bench_router_fast_path);
 criterion_main!(benches);

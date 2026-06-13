@@ -2052,6 +2052,7 @@ dependencies = [
  "libm",
  "memmap2",
  "reqwest",
+ "rkyv",
  "rustfft",
  "serde",
  "serde_json",

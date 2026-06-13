@@ -48,6 +48,14 @@ impl SelfEvolvingLoop {
             println!("[Macro Discovery] Auto-generating an O(1) UnionCode Macro to replace this O(N) evaluation sequence.");
             println!("[Macro Discovery] Macro injected into DualCacheFF.");
             
+            use std::hash::{Hash, Hasher};
+            use std::collections::hash_map::DefaultHasher;
+            let mut hasher = DefaultHasher::new();
+            path_key.hash(&mut hasher);
+            let intent_hash = hasher.finish();
+            
+            crate::memory_mesh::MemoryMesh::global().cache_intent_success(intent_hash, format!("O(1) MACRO for {}", path_key));
+            
             // Reset state to avoid repetitive discovery
             current_state.base_values[0] = 0.0;
             return true;

@@ -92,6 +92,14 @@ impl Vec101FallbackEngine {
         }
         Err("Failed to communicate with native engine".to_string())
     }
+
+    pub fn generate_parallel(&self, prompts: &[String]) -> Result<Vec<String>, String> {
+        let mut lock = self.engine.lock().unwrap();
+        if let Some(engine) = lock.as_mut() {
+            return Ok(engine.generate_parallel(prompts));
+        }
+        Err("Failed to communicate with native engine".to_string())
+    }
 }
 
 use std::sync::OnceLock;

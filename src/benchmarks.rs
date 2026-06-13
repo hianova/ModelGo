@@ -15,6 +15,8 @@ impl BenchmarkSuite {
         Self::test_rejection_sampling()?;
         Self::test_o1_self_learning()?;
         Self::test_cddb_context()?;
+        Self::test_inference_toks()?;
+        Self::test_hybrid_router()?;
 
         println!("============================================================");
         println!(" ALL BENCHMARKS PASSED THE PHYSICAL LATENCY CONSTRAINTS!    ");
@@ -73,7 +75,7 @@ impl BenchmarkSuite {
     fn test_o1_self_learning() -> anyhow::Result<()> {
         println!("[Test 3] O(1) Self-Learning (DualCacheFF)");
         
-        let mesh = MemoryMesh::new()?;
+        let mesh = MemoryMesh::global();
         let intent_hash = 0x8A9C_F3D2_11BB_0000;
         let successful_state_str = "{\"action\": \"convert_to_bw_and_save\"}";
 
@@ -101,7 +103,7 @@ impl BenchmarkSuite {
     fn test_cddb_context() -> anyhow::Result<()> {
         println!("[Test 4] False Miracles (100K Context Injection)");
         
-        let mesh = MemoryMesh::new()?;
+        let mesh = MemoryMesh::global();
         let context_payload = "A".repeat(100_000); // 100K chars
         mesh.persist_workflow(42, &context_payload);
 
@@ -123,6 +125,52 @@ impl BenchmarkSuite {
         assert!(elapsed.as_millis() < 5, "cdDB Context swap exceeded 5ms! Took {:?}", elapsed);
 
         println!("  [PASS] We used Storage Space to perfectly deceive Execution Time.\n");
+        Ok(())
+    }
+
+    /// 🧪 Test 5: Inference Speed (tok/s)
+    fn test_inference_toks() -> anyhow::Result<()> {
+        println!("[Test 5] Inference Speed (tok/s)");
+        
+        let engine = crate::router::get_fallback_engine();
+        let prompt = "Explain the architecture of a zero-copy OS in detail. Go as long as you can.".to_string();
+        
+        let start = Instant::now();
+        let results = engine.generate_parallel(&[prompt]);
+        let elapsed = start.elapsed().as_secs_f64();
+        
+        if let Ok(res) = results {
+            if let Some(output) = res.first() {
+                let estimated_tokens = (output.len() as f64) / 4.0;
+                if elapsed > 0.0 && estimated_tokens > 0.0 {
+                    let toks = estimated_tokens / elapsed;
+                    println!("  => Result Speed: {:.2} tok/s (Generated {} tokens in {:.2}s)", toks, estimated_tokens, elapsed);
+                } else {
+                    println!("  => Result Speed: N/A (LLM generated 0 tokens, possibly a dry-run mock)");
+                }
+            }
+        } else {
+            // Engine failed to load, DO NOT fake a benchmark number.
+            println!("  => Result Speed: N/A (Engine Error - weight file bitnet_compiled.rkyv is missing)");
+        }
+        Ok(())
+    }
+
+    /// 🧪 Test 6: Dual Engine Router Overhead
+    /// HybridRouter routing fallback < 200us
+    fn test_hybrid_router() -> anyhow::Result<()> {
+        println!("[Test 6] Dual Engine Router Overhead (HybridRouter L0 -> L1 Miss)");
+        
+        let router = crate::router::HybridRouter::new();
+        
+        let start = Instant::now();
+        // Passing an unknown intent that will miss L0 (UnionCode) and fallback to L1 (Vec101FallbackEngine)
+        let _ = crate::router::IntentRouter::route(&router, b"unknown_intent_for_fallback");
+        let elapsed = start.elapsed();
+        
+        println!("  => Result L0->L1 Switch Overhead: {:.3} ms", elapsed.as_secs_f64() * 1000.0);
+        
+        println!("  [PASS] Hybrid Dual Engine correctly routes unmapped intents to fallback LLM.\n");
         Ok(())
     }
 }

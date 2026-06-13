@@ -25,3 +25,6 @@ pub use os_dispatch::OsDispatch;
 pub use benchmarks::BenchmarkSuite;
 pub use process_intent::process_intent;
 pub use fft_chaos::FftChaosAnalyzer;
+
+pub mod decision_engine;
+pub use decision_engine::{DecisionEngine, DecisionResult, RiskRating, ExternalDataSource};

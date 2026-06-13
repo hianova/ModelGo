@@ -2,7 +2,7 @@ use anyhow::Result;
 use cdDB::{CdDBDispatcher, WriteCommand, UserWriter, Attributes};
 use dualcache_ff::static_cache::static_cache::StaticDualCache;
 use dualcache_ff::config::Config;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 /// The Memory & State Mesh
 /// Bridges the mmap model loader, DualCacheFF routing, and cdDB disk persistence.
@@ -15,7 +15,15 @@ pub struct MemoryMesh {
     temporal_writer: UserWriter,
 }
 
+static GLOBAL_MESH: OnceLock<MemoryMesh> = OnceLock::new();
+
 impl MemoryMesh {
+    pub fn global() -> &'static MemoryMesh {
+        GLOBAL_MESH.get_or_init(|| {
+            MemoryMesh::new().expect("Failed to initialize global MemoryMesh")
+        })
+    }
+
     pub fn new() -> Result<Self> {
         let config = Config::with_memory_budget(1, 100);
         let cache = Arc::new(StaticDualCache::<u64, String, 128>::new(config));
@@ -24,7 +32,6 @@ impl MemoryMesh {
         let mut db = CdDBDispatcher::<1024>::new_std(None);
         let workflows_writer = db.register_partition("workflows".to_string());
         let temporal_writer = db.register_partition("temporal_log".to_string());
-        let _ = db.register_partition("kv_state".to_string());
 
         Ok(Self {
             cache,
