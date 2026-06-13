@@ -12,6 +12,7 @@ pub struct MemoryMesh {
     /// High-performance synchronous persistent storage engine.
     _db: CdDBDispatcher<1024>,
     workflows_writer: UserWriter,
+    temporal_writer: UserWriter,
 }
 
 impl MemoryMesh {
@@ -22,12 +23,14 @@ impl MemoryMesh {
         // Initialize cdDB for persisting long-text state and workflows
         let mut db = CdDBDispatcher::<1024>::new_std(None);
         let workflows_writer = db.register_partition("workflows".to_string());
+        let temporal_writer = db.register_partition("temporal_log".to_string());
         let _ = db.register_partition("kv_state".to_string());
 
         Ok(Self {
             cache,
             _db: db,
             workflows_writer,
+            temporal_writer,
         })
     }
 
@@ -58,6 +61,42 @@ impl MemoryMesh {
     pub fn get_cached_intent(&self, intent_hash: u64) -> Option<String> {
         self.cache.get(&intent_hash)
     }
+
+    /// Persists a temporal snapshot (e.g. an epoch) of a ChaosState or Workflow.
+    pub fn persist_temporal_state(&self, workflow_id: u32, epoch: u32, state_payload: Vec<u8>) {
+        let entity_id = ((workflow_id as usize) << 32) | (epoch as usize);
+        
+        let cmd = WriteCommand::InsertFast {
+            entity_id,
+            epoch,
+            record_type: 1, // 1 for ChaosState snapshot
+            payload: std::sync::Arc::new(state_payload),
+        };
+
+        if self.temporal_writer.send(cmd).is_ok() {
+            println!("[Memory Mesh] Temporal state for workflow {} at epoch {} successfully recorded.", workflow_id, epoch);
+        }
+    }
+
+    /// Retrieves a temporal snapshot of a ChaosState or Workflow at a specific epoch.
+    pub fn get_temporal_state(&self, workflow_id: u32, epoch: u32) -> Option<Vec<u8>> {
+        let entity_id = ((workflow_id as usize) << 32) | (epoch as usize);
+        
+        let mut result_payload = None;
+        let route = self._db.get_route("temporal_log")?;
+        
+        let nodes = [
+            cdDB::QueryNode::Get { entity_id, attr: "payload" }
+        ];
+        
+        route.execute_batch(&nodes, |res| {
+            if let cdDB::QueryResult::Blob(b) = res {
+                result_payload = Some(b);
+            }
+        });
+        
+        result_payload
+    }
 }
 
 #[cfg(test)]
@@ -75,5 +114,24 @@ mod tests {
         mesh.cache_intent_success(hash, state.to_string());
         
         assert_eq!(mesh.get_cached_intent(hash).unwrap(), state);
+    }
+
+    #[test]
+    fn test_temporal_state_persistence() {
+        let mesh = MemoryMesh::new().unwrap();
+        let workflow_id = 42;
+        
+        let state_epoch_1 = vec![1, 2, 3, 4];
+        let state_epoch_3 = vec![5, 6, 7, 8];
+        
+        mesh.persist_temporal_state(workflow_id, 1, state_epoch_1.clone());
+        mesh.persist_temporal_state(workflow_id, 3, state_epoch_3.clone());
+        
+        // Let background queue process
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        
+        assert_eq!(mesh.get_temporal_state(workflow_id, 1).unwrap(), state_epoch_1);
+        assert_eq!(mesh.get_temporal_state(workflow_id, 3).unwrap(), state_epoch_3);
+        assert_eq!(mesh.get_temporal_state(workflow_id, 2), None);
     }
 }

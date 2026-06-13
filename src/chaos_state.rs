@@ -2,6 +2,7 @@
 //! A neuro-symbolic, no_alloc, pure static math engine for simulating state transitions.
 //! Strictly utilizes `core` and `libm` to remain heap-independent.
 
+extern crate alloc;
 use core::f32;
 
 /// Lightweight, zero-allocation Xorshift32 PRNG.
@@ -75,6 +76,44 @@ impl<const N: usize, const D: usize> ChaosState<N, D> {
         // Lower s -> more chaos. Bound between 1.1 (Extreme chaos) and 3.0 (Gaussian-like).
         let target_s = 3.0 - (grad * 1.9);
         tweak.s_exponent = target_s.clamp(1.1, 3.0);
+    }
+
+    /// Serializes the ChaosState into a raw byte vector for fast temporal storage.
+    pub fn to_bytes(&self) -> alloc::vec::Vec<u8> {
+        let mut bytes = alloc::vec::Vec::with_capacity((N + D) * 4);
+        for w in self.macro_weights.iter() {
+            bytes.extend_from_slice(&w.to_le_bytes());
+        }
+        for b in self.base_values.iter() {
+            bytes.extend_from_slice(&b.to_le_bytes());
+        }
+        bytes
+    }
+
+    /// Deserializes the ChaosState from a raw byte slice.
+    pub fn from_bytes(data: &[u8]) -> Option<Self> {
+        if data.len() < (N + D) * 4 {
+            return None;
+        }
+        let mut macro_weights = [0.0; N];
+        let mut base_values = [0.0; D];
+        
+        let mut offset = 0;
+        for i in 0..N {
+            let chunk = data.get(offset..offset+4)?;
+            macro_weights[i] = f32::from_le_bytes(chunk.try_into().ok()?);
+            offset += 4;
+        }
+        for i in 0..D {
+            let chunk = data.get(offset..offset+4)?;
+            base_values[i] = f32::from_le_bytes(chunk.try_into().ok()?);
+            offset += 4;
+        }
+        
+        Some(Self {
+            macro_weights,
+            base_values,
+        })
     }
 }
 
@@ -208,5 +247,16 @@ mod tests {
         // Low stagnation (0.0) should raise s to converge
         state.adapt_tweak(&mut tweak, &MockFeedback(0.0));
         assert!((tweak.s_exponent - 3.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_serialization() {
+        let state = ChaosState::<2, 3>::new([1.5, -2.5, 3.14]);
+        let bytes = state.to_bytes();
+        assert_eq!(bytes.len(), 5 * 4); // 2 weights + 3 bases
+
+        let recovered = ChaosState::<2, 3>::from_bytes(&bytes).unwrap();
+        assert_eq!(state.macro_weights, recovered.macro_weights);
+        assert_eq!(state.base_values, recovered.base_values);
     }
 }
