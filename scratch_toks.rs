@@ -1,5 +1,5 @@
 use std::time::Instant;
-use vec101::engine::Vec101Engine;
+use model_go::engine::Vec101Engine;
 
 fn main() {
     let mut engine = match Vec101Engine::new("../vec101/tools/bitnet_compiled.rkyv") {

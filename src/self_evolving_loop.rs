@@ -3,6 +3,8 @@ use std::sync::Mutex;
 use crate::system2_verifier::UnionAst;
 use crate::chaos_state::{ChaosState, MicroTweak, RngState, step_forward_nd};
 
+use std::sync::OnceLock;
+
 /// Simulates the Self-Evolving logic: discovering O(1) macros from O(N) paths.
 pub struct SelfEvolvingLoop {
     /// Tracks the Chaos probability cloud of specific AST execution patterns.
@@ -11,7 +13,12 @@ pub struct SelfEvolvingLoop {
     rng: Mutex<RngState>,
 }
 
+static GLOBAL_EVOLVER: OnceLock<SelfEvolvingLoop> = OnceLock::new();
+
 impl SelfEvolvingLoop {
+    pub fn global() -> &'static SelfEvolvingLoop {
+        GLOBAL_EVOLVER.get_or_init(|| SelfEvolvingLoop::new())
+    }
     pub fn new() -> Self {
         Self {
             path_states: Mutex::new(HashMap::new()),

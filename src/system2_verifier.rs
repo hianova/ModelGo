@@ -37,28 +37,27 @@ impl System2Verifier {
         for attempt in 1..=max_retries {
             println!("\n[System 2] Attempt {}/{}", attempt, max_retries);
             
-            // Mock generating output via vec101.
-            // In a real system, we would query the local LLM here.
-            let draft_output = if attempt == 1 {
-                // First attempt: Simulate a syntax error (missing quote)
-                r#"{"opcode": 32, "payload_id": 1337, "arguments": ["test]}"#
-            } else if attempt == 2 {
-                // Second attempt: Simulate logical error (opcode 0)
-                r#"{"opcode": 0, "payload_id": 1337, "arguments": ["test"]}"#
-            } else {
-                // Third attempt: Perfect output
-                r#"{"opcode": 32, "payload_id": 1337, "arguments": ["test"]}"#
+            let engine = crate::router::get_fallback_engine();
+            let prompts = vec![_current_prompt.clone()];
+            let results = engine.generate_parallel(&prompts);
+
+            let draft_output = match results {
+                Ok(res) => res.first().cloned().unwrap_or_default(),
+                Err(e) => {
+                    println!("[System 2] Engine Failed: {}", e);
+                    bail!("Engine failed: {}", e);
+                }
             };
 
-            println!("[vec101] Generated draft: {}", draft_output);
+            println!("[LLM Native] Generated draft: {}", draft_output);
 
-            match Self::parse_and_verify(draft_output) {
+            match Self::parse_and_verify(&draft_output) {
                 Ok(ast) => return Ok(ast),
                 Err(e) => {
                     println!("[System 2] Validation Failed: {}", e);
                     println!("[Rejection Sampling] Injecting Error Trace into prompt for retry.");
                     // Append error trace for the next iteration
-                    _current_prompt = format!("{}\n\nPREVIOUS ERROR:\n{}\nFix the JSON syntax and logic.", initial_prompt, e);
+                    _current_prompt = format!("{}\n\nPREVIOUS ERROR:\n{}\nFix the JSON syntax and logic.", _current_prompt, e);
                 }
             }
         }
