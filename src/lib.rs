@@ -1,3 +1,4 @@
+pub mod loader;
 pub mod mmap_reader;
 pub mod router;
 pub mod jit_compiler;
@@ -34,3 +35,4 @@ pub use decision_engine::{DecisionEngine, DecisionResult, RiskRating, ExternalDa
 pub mod engine;
 pub use engine::Vec101Engine;
 
+pub mod daemon;

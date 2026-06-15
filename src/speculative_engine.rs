@@ -1,5 +1,5 @@
 use vec101::{vec101_compute, vec101_context, types::QuantType};
-use vec101::loader::ZeroCopyModelLoader;
+use crate::loader::{ZeroCopyModelLoader, ArchivedSerializedLayerData};
 use std::sync::Arc;
 
 use crate::tiered_kv::TieredKVCache;
@@ -26,7 +26,7 @@ impl SpeculativeEngine {
     /// Drafting Phase: Layer skipping MTP
     pub unsafe fn run_draft_mode(&mut self, target_tokens: usize, layer_stride: usize) -> Vec<u32> {
         let mut drafted = Vec::with_capacity(target_tokens);
-        let layers = &self.loader.model_weights.layers;
+        let layers = unsafe { &(*self.loader.archived_weights).layers };
         
         for _ in 0..target_tokens {
             for (idx, layer) in layers.iter().enumerate() {
@@ -35,8 +35,8 @@ impl SpeculativeEngine {
                 }
                 
                 let (quant_type, w_stream) = match &layer.data {
-                    vec101::types::ArchivedLayerData::Bit1_58(blocks) => (QuantType::Bit1_58, blocks.as_ptr() as *const u8),
-                    vec101::types::ArchivedLayerData::Q4_0(blocks) => (QuantType::Q4_0, blocks.as_ptr() as *const u8),
+                    ArchivedSerializedLayerData::Bit1_58(blocks) => (QuantType::Bit1_58, blocks.as_ptr() as *const u8),
+                    ArchivedSerializedLayerData::Q4_0(blocks) => (QuantType::Q4_0, blocks.as_ptr() as *const u8),
                 };
 
                 let ctx = vec101_context {
@@ -74,7 +74,7 @@ impl SpeculativeEngine {
     /// Verify Phase: Compute missing layers with Batch=N
     pub unsafe fn run_verify_mode(&mut self, draft_tokens: &[u32], layer_stride: usize) -> usize {
         let len = draft_tokens.len();
-        let layers = &self.loader.model_weights.layers;
+        let layers = unsafe { &(*self.loader.archived_weights).layers };
         
         for (idx, layer) in layers.iter().enumerate() {
             // Only process the layers we skipped during draft
@@ -83,8 +83,8 @@ impl SpeculativeEngine {
             }
             
             let (quant_type, w_stream) = match &layer.data {
-                vec101::types::ArchivedLayerData::Bit1_58(blocks) => (QuantType::Bit1_58, blocks.as_ptr() as *const u8),
-                vec101::types::ArchivedLayerData::Q4_0(blocks) => (QuantType::Q4_0, blocks.as_ptr() as *const u8),
+                ArchivedSerializedLayerData::Bit1_58(blocks) => (QuantType::Bit1_58, blocks.as_ptr() as *const u8),
+                ArchivedSerializedLayerData::Q4_0(blocks) => (QuantType::Q4_0, blocks.as_ptr() as *const u8),
             };
 
             // In a real scenario, we fetch the blocks needed for the attention

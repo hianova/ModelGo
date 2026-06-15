@@ -64,6 +64,13 @@ enum Commands {
         #[arg(short, long)]
         file: String,
     },
+    /// Start the background daemon for Two-Tier Indexing
+    Daemon,
+    /// Query the knowledge base, triggering Page Faults and KV Cache generation
+    Query {
+        #[arg(short, long)]
+        text: String,
+    },
 }
 
 #[tokio::main]
@@ -241,6 +248,17 @@ async fn main() -> anyhow::Result<()> {
             }
             // Just print the JSON array of marks to stdout (stockgo JS script will capture it)
             println!("{}", serde_json::to_string(&mark)?);
+        }
+        Commands::Daemon => {
+            model_go::daemon::Daemon::run()?;
+        }
+        Commands::Query { text } => {
+            // Assume 1.58-bit model or any model placeholder path
+            let mut engine = model_go::Vec101Engine::new("placeholder_path")?;
+            match engine.query_with_page_fault(text) {
+                Ok(response) => println!("[Query Result]\n{}", response),
+                Err(e) => eprintln!("[Query Error] {}", e),
+            }
         }
     }
     

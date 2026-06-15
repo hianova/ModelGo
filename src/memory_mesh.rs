@@ -64,6 +64,24 @@ impl MemoryMesh {
         }
     }
 
+    /// Exposes a way to retrieve stored workflows or metadata from the cdDB partition.
+    pub fn get_workflow(&self, entity_id: u32) -> Option<String> {
+        let mut result = None;
+        let route = self._db.get_route("workflows")?;
+        
+        let nodes = [
+            cdDB::QueryNode::Get { entity_id: entity_id as usize, attr: "workflow_data" }
+        ];
+        
+        route.execute_batch(&nodes, |res| {
+            if let cdDB::QueryResult::Str(s) = res {
+                result = Some(s.clone());
+            }
+        });
+        
+        result
+    }
+
     /// Exposes the inner wait-free DualCache lookup for O(1) route verification.
     pub fn get_cached_intent(&self, intent_hash: u64) -> Option<String> {
         self.cache.get(&intent_hash)

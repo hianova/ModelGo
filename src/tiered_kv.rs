@@ -105,4 +105,22 @@ impl TieredKVCache {
 
         None
     }
+
+    /// Cache Invalidation: Purge blocks from both DualCacheFF and cdDB persistent storage.
+    pub fn invalidate_blocks(&self, start_block: usize, end_block: usize) {
+        println!("[TieredKVCache] Invalidating Cache Blocks {} to {} due to file modification...", start_block, end_block);
+        for block_idx in start_block..=end_block {
+            let key = self.block_key(block_idx);
+            
+            // 1. Invalidate L1/L2 in-memory Cache (DualCacheFF)
+            self.cache.remove(&key);
+            
+            // 2. Invalidate L3 Disk Cache (cdDB)
+            if self.kv_writer.send(WriteCommand::Delete {
+                entity_id: key as usize,
+            }).is_ok() {
+                // Background worker will perform the deletion
+            }
+        }
+    }
 }
