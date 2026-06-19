@@ -11,7 +11,8 @@ fn bench_rejection_sampling(c: &mut Criterion) {
 }
 
 fn bench_memory_mesh_cache(c: &mut Criterion) {
-    let mesh = MemoryMesh::new().unwrap();
+    let config = model_go::config::EngineConfig::default();
+    let mesh = MemoryMesh::new(&config).unwrap();
     let hash = 0x12345;
     mesh.cache_intent_success(hash, "test state".to_string());
     
@@ -47,7 +48,8 @@ fn bench_chaos_learning_step(c: &mut Criterion) {
 // and extremely fast to benchmark.
 //
 fn bench_router_fast_path(c: &mut Criterion) {
-    let router = HybridRouter::new();
+    let config = model_go::config::EngineConfig::default();
+    let router = HybridRouter::new(&config);
     c.bench_function("hybrid_router_miss", |b| {
         b.iter(|| {
             let _ = router.route(black_box(b"unknown"));

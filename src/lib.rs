@@ -1,3 +1,4 @@
+pub mod config;
 pub mod loader;
 pub mod mmap_reader;
 pub mod router;
@@ -14,6 +15,8 @@ pub mod ffi;
 pub mod biology_router;
 pub mod fft_chaos;
 pub mod speculative_engine;
+
+pub mod science;
 
 pub mod tiered_kv;
 pub use speculative_engine::SpeculativeEngine;

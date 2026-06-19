@@ -263,9 +263,10 @@ impl Daemon {
         let _preview: String = text.chars().take(500).collect();
         println!("[Daemon] Left Brain (1.58-bit) analyzing 500-char preview...");
         
-        // Execute real 1.58-bit model forward pass to run the physical matrix computation
+        // Execute 0-Token generation logit classification to eliminate decoding overhead
         let engine = crate::router::get_fallback_engine();
-        let _ = engine.generate_parallel(&[format!("Classify: {}", _preview)]);
+        // Assume candidate tokens [1, 2, 3] map to Document Categories (e.g., Contract, Invoice, Report)
+        let _ = engine.classify_logits(&format!("Classify Document Type: {}", _preview), &[1, 2, 3]);
 
         // Write to cdDB
         let mesh = crate::memory_mesh::MemoryMesh::global();
@@ -290,7 +291,7 @@ impl Daemon {
         let session_id = hasher.finish() as u32;
 
         println!("[Daemon] Cache Invalidation Triggered! Purging KV Blocks for {:?}", filename);
-        let kv_cache = crate::tiered_kv::TieredKVCache::new(session_id, 2048, 16);
+        let kv_cache = crate::tiered_kv::TieredKVCache::new(session_id, 2048, 16, &crate::config::EngineConfig::default());
         kv_cache.invalidate_blocks(0, 100);
 
         // Extract metadata dynamically from the modified file

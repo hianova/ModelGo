@@ -1,14 +1,12 @@
 use anyhow::Result;
-use cdDB::{CdDBDispatcher, WriteCommand, UserWriter, Attributes};
-use dualcache_ff::static_cache::static_cache::StaticDualCache;
-use dualcache_ff::config::Config;
+use cdDB::{CdDBDispatcher, WriteCommand, UserWriter, Attributes, DualCacheFF, Config};
 use std::sync::{Arc, OnceLock};
 
 /// The Memory & State Mesh
 /// Bridges the mmap model loader, DualCacheFF routing, and cdDB disk persistence.
 pub struct MemoryMesh {
     /// O(1) Wait-Free routing state machine mapping Intent Hash -> Success State.
-    cache: Arc<StaticDualCache<u64, String, 128>>,
+    pub cache: Arc<DualCacheFF<u64, String>>,
     /// High-performance synchronous persistent storage engine.
     _db: CdDBDispatcher<1024>,
     workflows_writer: UserWriter,
@@ -20,13 +18,13 @@ static GLOBAL_MESH: OnceLock<MemoryMesh> = OnceLock::new();
 impl MemoryMesh {
     pub fn global() -> &'static MemoryMesh {
         GLOBAL_MESH.get_or_init(|| {
-            MemoryMesh::new().expect("Failed to initialize global MemoryMesh")
+            MemoryMesh::new(&crate::config::EngineConfig::default()).expect("Failed to initialize global MemoryMesh")
         })
     }
 
-    pub fn new() -> Result<Self> {
-        let config = Config::with_memory_budget(1, 100);
-        let cache = Arc::new(StaticDualCache::<u64, String, 128>::new(config));
+    pub fn new(config: &crate::config::EngineConfig) -> Result<Self> {
+        let db_config = Config::with_memory_budget(config.mesh_memory_budget, config.mesh_eviction_threshold);
+        let cache = Arc::new(DualCacheFF::<u64, String>::new(db_config));
         
         // Initialize cdDB for persisting long-text state and workflows
         let mut db = CdDBDispatcher::<1024>::new_std(None);
@@ -124,39 +122,3 @@ impl MemoryMesh {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_cache_insertion_and_lookup() {
-        let mesh = MemoryMesh::new().unwrap();
-        let hash = 0x1234_5678;
-        let state = "{\"action\": \"test\"}";
-        
-        assert_eq!(mesh.get_cached_intent(hash), None);
-        
-        mesh.cache_intent_success(hash, state.to_string());
-        
-        assert_eq!(mesh.get_cached_intent(hash).unwrap(), state);
-    }
-
-    #[test]
-    fn test_temporal_state_persistence() {
-        let mesh = MemoryMesh::new().unwrap();
-        let workflow_id = 42;
-        
-        let state_epoch_1 = vec![1, 2, 3, 4];
-        let state_epoch_3 = vec![5, 6, 7, 8];
-        
-        mesh.persist_temporal_state(workflow_id, 1, state_epoch_1.clone());
-        mesh.persist_temporal_state(workflow_id, 3, state_epoch_3.clone());
-        
-        // Let background queue process
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        
-        assert_eq!(mesh.get_temporal_state(workflow_id, 1).unwrap(), state_epoch_1);
-        assert_eq!(mesh.get_temporal_state(workflow_id, 3).unwrap(), state_epoch_3);
-        assert_eq!(mesh.get_temporal_state(workflow_id, 2), None);
-    }
-}

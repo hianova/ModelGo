@@ -16,18 +16,28 @@ impl System2Verifier {
     pub fn parse_and_verify(draft_output: &str) -> Result<UnionAst> {
         println!("[Union Parser] Verifying draft output...");
         
-        match serde_json::from_str::<UnionAst>(draft_output) {
-            Ok(ast) => {
-                if ast.opcode == 0 {
-                    bail!("Invalid Opcode 0 provided. Must be non-zero.");
-                }
-                println!("[Union Parser] Success. AST Validated: {:?}", ast);
-                Ok(ast)
-            }
-            Err(e) => {
-                bail!("Syntax Error: {}", e)
-            }
+        let parts: Vec<&str> = draft_output.trim().split('|').collect();
+        if parts.len() < 2 {
+            bail!("Syntax Error: Expected at least OpCode|PayloadID");
         }
+
+        let opcode = parts[0].parse::<u8>().map_err(|e| anyhow::anyhow!("Invalid OpCode: {}", e))?;
+        let payload_id = parts[1].parse::<u32>().map_err(|e| anyhow::anyhow!("Invalid PayloadID: {}", e))?;
+        
+        if opcode == 0 {
+            bail!("Invalid Opcode 0 provided. Must be non-zero.");
+        }
+
+        let arguments = parts.into_iter().skip(2).map(|s| s.to_string()).collect();
+
+        let ast = UnionAst {
+            opcode,
+            payload_id,
+            arguments,
+        };
+
+        println!("[Union Parser] Success. AST Validated: {:?}", ast);
+        Ok(ast)
     }
 
     /// Rejection Sampling Loop: Wraps vec101 calls and retries on failure.
@@ -57,7 +67,7 @@ impl System2Verifier {
                     println!("[System 2] Validation Failed: {}", e);
                     println!("[Rejection Sampling] Injecting Error Trace into prompt for retry.");
                     // Append error trace for the next iteration
-                    _current_prompt = format!("{}\n\nPREVIOUS ERROR:\n{}\nFix the JSON syntax and logic.", _current_prompt, e);
+                    _current_prompt = format!("{}\n\nPREVIOUS ERROR:\n{}\nFix the syntax to follow the pipe-separated format: OpCode|PayloadID|Arg1...", _current_prompt, e);
                 }
             }
         }
@@ -66,40 +76,4 @@ impl System2Verifier {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn parse_valid_ast() {
-        let json = r#"{"opcode": 32, "payload_id": 1337, "arguments": ["test"]}"#;
-        let ast = System2Verifier::parse_and_verify(json).unwrap();
-        assert_eq!(ast.opcode, 32);
-        assert_eq!(ast.payload_id, 1337);
-        assert_eq!(ast.arguments, vec!["test"]);
-    }
-
-    #[test]
-    fn parse_rejects_opcode_zero() {
-        let json = r#"{"opcode": 0, "payload_id": 1337, "arguments": []}"#;
-        assert!(System2Verifier::parse_and_verify(json).is_err());
-    }
-
-    #[test]
-    fn parse_rejects_invalid_json() {
-        let json = r#"{"opcode": 32, "payload_id": 1337, "arguments": [test]}"#;
-        assert!(System2Verifier::parse_and_verify(json).is_err());
-    }
-
-    #[test]
-    fn rejection_sampling_succeeds_within_retries() {
-        let result = System2Verifier::execute_with_rejection_sampling("test prompt", 3);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn rejection_sampling_fails_with_zero_retries() {
-        let result = System2Verifier::execute_with_rejection_sampling("test prompt", 0);
-        assert!(result.is_err());
-    }
-}

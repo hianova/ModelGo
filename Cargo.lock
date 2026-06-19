@@ -11,7 +11,7 @@ dependencies = [
  "candle-nn",
  "candle-transformers",
  "clap",
- "dualcache-ff",
+ "dualcache-ff 0.4.1",
  "hex",
  "regex",
  "serde",
@@ -436,10 +436,10 @@ dependencies = [
 
 [[package]]
 name = "cdDB"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "ahash 0.8.12",
- "dualcache-ff",
+ "dualcache-ff 0.5.0",
  "hashbrown 0.14.5",
  "memmap2",
 ]
@@ -831,6 +831,15 @@ name = "dualcache-ff"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc03add4b1537ef830e496fe135a7524c5d0883a52f63cefc59076bed8b9c8ad"
+dependencies = [
+ "ahash 0.8.12",
+]
+
+[[package]]
+name = "dualcache-ff"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdabb4de3f7733d05292a324481e2773f601f139b1837991d870c1ed4b26a08c"
 dependencies = [
  "ahash 0.8.12",
 ]
@@ -2137,7 +2146,6 @@ dependencies = [
  "cdDB",
  "clap",
  "criterion",
- "dualcache-ff",
  "hashbrown 0.14.5",
  "lazy_static",
  "libm",
@@ -3946,9 +3954,6 @@ checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
 [[package]]
 name = "union_code"
 version = "0.2.0"
-dependencies = [
- "dualcache-ff",
-]
 
 [[package]]
 name = "untrusted"

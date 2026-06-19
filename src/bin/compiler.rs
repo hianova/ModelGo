@@ -44,7 +44,7 @@ fn main() {
         let parts: Vec<&str> = tensor_name.rsplitn(2, '.').collect();
         if parts.len() != 2 { 
             // Possibly a simple weight tensor without suffix
-            let data_bytes = tensor.data();
+            let _data_bytes = tensor.data();
             // Try to load as raw f16 and convert to f32 (simplified, assuming fp32 for now)
             // Need actual dtype check, assuming fp32 for demonstration
             continue; 

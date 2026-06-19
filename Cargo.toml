@@ -5,12 +5,11 @@ edition = "2024"
 
 [dependencies]
 union_code = { path = "../UnionCode" }
-cdDB = { path = "../cdDB" }
+cdDB = { path = "../cdDB", features = ["dualcache-ff"] }
 memmap2 = "0.9.10"
 clap = { version = "4.5", features = ["derive"] }
 anyhow = "1.0"
 tokio = { version = "1.37", features = ["full", "rt-multi-thread"] }
-dualcache-ff = "0.4.1"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -31,5 +30,6 @@ criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3.8"
 
 [[bench]]
-name = "latency"
+name = "subsystem_latency"
+path = "benches/subsystem_latency.rs"
 harness = false

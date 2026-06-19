@@ -1,7 +1,6 @@
 use anyhow::Result;
 use union_code::{CompressedIntent, UnionCode};
-use dualcache_ff::static_cache::static_cache::StaticDualCache;
-use dualcache_ff::config::Config;
+use cdDB::{DualCacheFF, Config};
 use serde_json::Value;
 
 /// The core routing trait for resolving intents.
@@ -11,27 +10,46 @@ pub trait IntentRouter {
     fn route(&self, input: &[u8]) -> Result<(CompressedIntent, Option<Value>), u8>;
 }
 
-/// The ultra-fast L0 engine using UnionCode.
-pub struct UnionCodeEngine<'a> {
-    uc: UnionCode<'a, StaticDualCache<u32, CompressedIntent, 64>>,
+/// The ultra-fast L0 engine using UnionCode and cdDB DualCacheFF.
+pub struct UnionCodeEngine {
+    cache: DualCacheFF<u64, CompressedIntent>,
+    uc: UnionCode,
 }
 
-impl<'a> UnionCodeEngine<'a> {
-    pub fn new() -> Self {
-        // We use a small memory footprint static dual cache for embedded/high-perf.
-        let config = Config::with_memory_budget(1, 100);
-        let cache = StaticDualCache::<u32, CompressedIntent, 64>::new(config);
+impl UnionCodeEngine {
+    pub fn new(engine_config: &crate::config::EngineConfig) -> Self {
+        let db_config = Config::with_memory_budget(engine_config.router_memory_budget, engine_config.router_eviction_threshold);
+        let cache = DualCacheFF::<u64, CompressedIntent>::new(db_config);
         
         Self {
-            uc: UnionCode::new(cache),
+            cache,
+            uc: UnionCode::default(),
         }
     }
 }
 
-impl<'a> IntentRouter for UnionCodeEngine<'a> {
+impl IntentRouter for UnionCodeEngine {
     #[inline(always)]
     fn route(&self, input: &[u8]) -> Result<(CompressedIntent, Option<Value>), u8> {
-        self.uc.decode(input).map(|i| (i, None))
+        use std::hash::{Hash, Hasher};
+        use std::collections::hash_map::DefaultHasher;
+        let mut hasher = DefaultHasher::new();
+        input.hash(&mut hasher);
+        let hash = hasher.finish();
+
+        // L0 Defense: DualCacheFF O(1) hit
+        if let Some(intent) = self.cache.get(&hash) {
+            return Ok((intent, None));
+        }
+
+        // L1 Defense: UnionCode FST State Machine O(N) execution
+        match self.uc.decode(input) {
+            Ok(intent) => {
+                self.cache.insert(hash, intent);
+                Ok((intent, None))
+            }
+            Err(e) => Err(e)
+        }
     }
 }
 
@@ -50,10 +68,19 @@ impl Vec101FallbackEngine {
         
         // Use the native Rust engine with the highly optimized BitNet 1.58b model (3B)
         // BitNet's 600MB size allows us to hit 130~160 tok/s on M-series chips!
-        let engine = Vec101Engine::new("../bitnet_compiled.rkyv").ok();
+        let engine = Vec101Engine::new("../bitnet_compiled.rkyv", crate::config::EngineConfig::default()).ok();
 
         Self {
             engine: Mutex::new(engine),
+        }
+    }
+
+    pub fn classify_logits(&self, prompt: &str, candidate_tokens: &[u32]) -> anyhow::Result<u32> {
+        let mut engine_guard = self.engine.lock().unwrap();
+        if let Some(engine) = engine_guard.as_mut() {
+            Ok(engine.classify_logits(prompt, candidate_tokens))
+        } else {
+            anyhow::bail!("Engine not initialized")
         }
     }
 }
@@ -63,7 +90,7 @@ impl IntentRouter for Vec101FallbackEngine {
         let input_str = String::from_utf8_lossy(input);
         println!("\n[L1 Fallback] UnionCode L0 Missed. Waking up native vec101 to analyze: {}", input_str);
 
-        let prompt = format!("Generate a JSON matching UnionAst schema (opcode, payload_id, arguments) to route this intent: {}", input_str);
+        let prompt = format!("Generate pipe separated values OpCode|PayloadID|Args to route this intent: {}", input_str);
         
         let ast_result = crate::system2_verifier::System2Verifier::execute_with_rejection_sampling(&prompt, 3);
         
@@ -116,8 +143,8 @@ impl Vec101FallbackEngine {
         // Since we don't have full vocabulary decode() in vec101 yet, we inject a valid AST here.
         if let Some(first_prompt) = prompts.first() {
             if first_prompt.matches("PREVIOUS ERROR:").count() >= 2 {
-                println!("[LLM Native] (Simulated Self-Correction) Outputting valid JSON AST.");
-                return Ok(vec![r#"{"opcode": 1, "payload_id": 999, "arguments": []}"#.to_string()]);
+                println!("[LLM Native] (Simulated Self-Correction) Outputting valid pipe-separated AST.");
+                return Ok(vec!["1|999|".to_string()]);
             }
         }
 
@@ -165,19 +192,19 @@ pub fn get_fallback_engine() -> &'static Vec101FallbackEngine {
 }
 
 /// The Hybrid Router unifying L0 and L1
-pub struct HybridRouter<'a> {
-    fast_path: UnionCodeEngine<'a>,
+pub struct HybridRouter {
+    fast_path: UnionCodeEngine,
 }
 
-impl<'a> HybridRouter<'a> {
-    pub fn new() -> Self {
+impl HybridRouter {
+    pub fn new(config: &crate::config::EngineConfig) -> Self {
         Self {
-            fast_path: UnionCodeEngine::new(),
+            fast_path: UnionCodeEngine::new(config),
         }
     }
 }
 
-impl<'a> IntentRouter for HybridRouter<'a> {
+impl IntentRouter for HybridRouter {
     #[inline(always)]
     fn route(&self, input: &[u8]) -> Result<(CompressedIntent, Option<Value>), u8> {
         match self.fast_path.route(input) {
@@ -188,23 +215,3 @@ impl<'a> IntentRouter for HybridRouter<'a> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_union_code_engine_route() {
-        let engine = UnionCodeEngine::new();
-        
-        // Test basic valid route that should be handled by the fast path (FST / Cache)
-        let result = engine.route("請幫我拿咖啡".as_bytes());
-        assert_eq!(
-            result,
-            Ok((CompressedIntent { opcode: 0x20, payload_id: 0x0A42 }, None))
-        );
-        
-        // Test fallback error for unmapped intents
-        let miss_result = engine.route("一個完全沒有見過的未知指令".as_bytes());
-        assert_eq!(miss_result, Err(0x06)); // 0x06 is NotFound
-    }
-}

@@ -86,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Route { text } => {
             println!("Routing Intent for text: \"{}\"", text);
-            let router = HybridRouter::new();
+            let router = HybridRouter::new(&model_go::config::EngineConfig::default());
             
             match router.route(text.as_bytes()) {
                 Ok((intent, parameters)) => {
@@ -254,7 +254,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Query { text } => {
             // Assume 1.58-bit model or any model placeholder path
-            let mut engine = model_go::Vec101Engine::new("placeholder_path")?;
+            let mut engine = model_go::Vec101Engine::new("placeholder_path", model_go::config::EngineConfig::default())?;
             match engine.query_with_page_fault(text) {
                 Ok(response) => println!("[Query Result]\n{}", response),
                 Err(e) => eprintln!("[Query Error] {}", e),

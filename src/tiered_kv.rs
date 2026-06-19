@@ -1,5 +1,4 @@
-use cdDB::{CdDBDispatcher, WriteCommand, QueryNode, QueryResult, Attributes, UserWriter};
-use dualcache_ff::{DualCacheFF, Config};
+use cdDB::{CdDBDispatcher, WriteCommand, QueryNode, QueryResult, Attributes, UserWriter, DualCacheFF, Config};
 use std::sync::Arc;
 
 /// A Tiered KV Cache OS leveraging DualCache-FF and cdDB.
@@ -13,9 +12,9 @@ pub struct TieredKVCache {
 }
 
 impl TieredKVCache {
-    pub fn new(session_id: u32, hidden_dim: usize, block_size: usize) -> Self {
-        let config = Config::with_memory_budget(512 * 1024 * 1024, 80); // 512MB RAM Budget
-        let cache = Arc::new(DualCacheFF::new(config));
+    pub fn new(session_id: u32, hidden_dim: usize, block_size: usize, engine_config: &crate::config::EngineConfig) -> Self {
+        let db_config = Config::with_memory_budget(engine_config.kv_cache_memory_budget, engine_config.kv_cache_eviction_threshold);
+        let cache = Arc::new(DualCacheFF::new(db_config));
         
         let mut db = CdDBDispatcher::<1024>::new_std(None);
         let kv_writer = db.register_partition("kv_storage".to_string());
@@ -122,5 +121,12 @@ impl TieredKVCache {
                 // Background worker will perform the deletion
             }
         }
+    }
+}
+
+impl Drop for TieredKVCache {
+    fn drop(&mut self) {
+        // Explicitly shut down the wait-free Daemon thread to prevent memory leak
+        let _ = self.cache.cmd_tx.try_send(cdDB::daemon::Command::Shutdown);
     }
 }

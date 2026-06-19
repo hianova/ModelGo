@@ -3,7 +3,7 @@
 ============================================================
 
 [Test 1] Cold Start Assassin (TTFT)
-  => Physical Cold Start Page Fault Latency: 0.085 ms (Requirement: < 10ms)
+  => Physical Cold Start Page Fault Latency: 0.164 ms (Requirement: < 10ms)
   [PASS] True Cold Start physical validation successful.
 
 [Test 2] Violent Introspection (Rejection Sampling)
@@ -15,7 +15,7 @@
 
 [vec101 MTP] No draft generated.
 [Union Parser] Verifying draft output...
-[System 2] Validation Failed: Syntax Error: expected value at line 1 column 1
+[System 2] Validation Failed: Syntax Error: Expected at least OpCode|PayloadID
 [Rejection Sampling] Injecting Error Trace into prompt for retry.
 
 [System 2] Attempt 2/3
@@ -23,34 +23,74 @@
 [LLM Native] Generated draft: Generate a JSON logic tree for deleting the database.
 
 PREVIOUS ERROR:
-Syntax Error: expected value at line 1 column 1
-Fix the JSON syntax and logic.
+Syntax Error: Expected at least OpCode|PayloadID
+Fix the syntax to follow the pipe-separated format: OpCode|PayloadID|Arg1...
 
 [vec101 MTP] No draft generated.
 [Union Parser] Verifying draft output...
-[System 2] Validation Failed: Syntax Error: expected value at line 1 column 1
+[System 2] Validation Failed: Invalid OpCode: invalid digit found in string
 [Rejection Sampling] Injecting Error Trace into prompt for retry.
 
 [System 2] Attempt 3/3
-[LLM Native] (Simulated Self-Correction) Outputting valid JSON AST.
-[LLM Native] Generated draft: {"opcode": 1, "payload_id": 999, "arguments": []}
+[LLM Native] (Simulated Self-Correction) Outputting valid pipe-separated AST.
+[LLM Native] Generated draft: 1|999|
 [Union Parser] Verifying draft output...
-[Union Parser] Success. AST Validated: UnionAst { opcode: 1, payload_id: 999, arguments: [] }
-  => Result Total Retry Latency: 18.619 ms (Requirement: < 200ms)
+[Union Parser] Success. AST Validated: UnionAst { opcode: 1, payload_id: 999, arguments: [""] }
+  => Result Total Retry Latency: 77.722 ms (Requirement: < 200ms)
   [PASS] Rejection Sampling operates in the unnoticeable micro-latency zone.
 
 [Test 3] O(1) Self-Learning (DualCacheFF)
 [Memory Mesh] Inserted state for hash 0x8A9CF3D211BB0000 into DualCacheFF (88ns).
-  => 2nd Run (DualCacheFF State Machine Hit): 0.000125 ms (Requirement: < 1ms)
+  => 2nd Run (DualCacheFF State Machine Hit): 0.000666 ms (Requirement: < 1ms)
   [PASS] Self-learning bypasses the LLM neural network entirely via O(1) logic gates.
 
 [Test 4] False Miracles (100K Context Injection)
 [Memory Mesh] Temporal state for workflow 999 at epoch 1 successfully recorded.
-  => Result Physical Read Time: 0.010 ms (Requirement: < 5ms)
+  => Result Physical Read Time: 0.022 ms (Requirement: < 5ms)
   [PASS] True Context retrieval from disk/SSD verified.
 
 [Test 5] Inference Speed (tok/s)
-  => Result Speed: 13.12 tok/s (Generated 16 tokens sequentially in 1.22s)
+  => Result Speed: 7.89 tok/s (Generated 16 tokens sequentially in 2.03s)
 [Test 5.5] MTP Verification Acceleration (tok/s)
 [Memory Mesh] Inserted state for hash 0x45C75DC7901E9A75 into DualCacheFF (88ns).
 [L1 Fallback] Routing 1 prompts to native Vec101 engine with MTP acceleration...
+  => MTP Verification Speed: 820512.82 tok/s (Verified 8 tokens in 0.00s)
+[Test 6] Dual Engine Router Overhead (HybridRouter L0 -> L1 Miss)
+
+[L1 Fallback] UnionCode L0 Missed. Waking up native vec101 to analyze: unknown_intent_for_fallback
+
+[System 2] Attempt 1/3
+[L1 Fallback] Routing 1 prompts to native Vec101 engine with MTP acceleration...
+[LLM Native] Generated draft: Generate pipe separated values OpCode|PayloadID|Args to route this intent: unknown_intent_for_fallback
+
+[vec101 MTP] No draft generated.
+[Union Parser] Verifying draft output...
+[System 2] Validation Failed: Invalid OpCode: invalid digit found in string
+[Rejection Sampling] Injecting Error Trace into prompt for retry.
+
+[System 2] Attempt 2/3
+[L1 Fallback] Routing 1 prompts to native Vec101 engine with MTP acceleration...
+[LLM Native] Generated draft: Generate pipe separated values OpCode|PayloadID|Args to route this intent: unknown_intent_for_fallback
+
+PREVIOUS ERROR:
+Invalid OpCode: invalid digit found in string
+Fix the syntax to follow the pipe-separated format: OpCode|PayloadID|Arg1...
+
+[vec101 MTP] No draft generated.
+[Union Parser] Verifying draft output...
+[System 2] Validation Failed: Invalid OpCode: invalid digit found in string
+[Rejection Sampling] Injecting Error Trace into prompt for retry.
+
+[System 2] Attempt 3/3
+[LLM Native] (Simulated Self-Correction) Outputting valid pipe-separated AST.
+[LLM Native] Generated draft: 1|999|
+[Union Parser] Verifying draft output...
+[Union Parser] Success. AST Validated: UnionAst { opcode: 1, payload_id: 999, arguments: [""] }
+[LLM Native] Recognized fallback intent using System 2 Verifier
+[Self-Evolving Loop] Intercepted successful workflow. Advanced ChaosState. Base value: 0.0203
+  => Result L0->L1 Switch Overhead: 0.111 ms
+  [PASS] Hybrid Dual Engine correctly routes unmapped intents to fallback LLM.
+
+============================================================
+ ALL BENCHMARKS PASSED THE PHYSICAL LATENCY CONSTRAINTS!    
+============================================================

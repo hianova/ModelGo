@@ -76,7 +76,15 @@ impl BenchmarkSuite {
         let successful_state_str = "{\"action\": \"convert_to_bw_and_save\"}";
 
         // Simulating the 1st Run (Cache Miss LLM generation is mocked, but we physically insert to cache)
-        mesh.cache_intent_success(intent_hash, successful_state_str.to_string());
+        // We insert it multiple times to naturally bypass the L1 Probation Filter (scan-resistance) 
+        // and trigger the TLS miss_buffer natural flush (batch size usually 32),
+        // adhering to the statistics-derived mechanisms rather than subjective forced flushes.
+        for _ in 0..32 {
+            mesh.cache_intent_success(intent_hash, successful_state_str.to_string());
+        }
+
+        // Wait a tiny bit for the daemon thread to naturally process the message channel
+        std::thread::sleep(std::time::Duration::from_millis(50));
 
         // Measure the physical 2nd Run (Cache Hit)
         let start_hit = Instant::now();
@@ -196,7 +204,7 @@ impl BenchmarkSuite {
     fn test_hybrid_router() -> anyhow::Result<()> {
         println!("[Test 6] Dual Engine Router Overhead (HybridRouter L0 -> L1 Miss)");
         
-        let router = crate::router::HybridRouter::new();
+        let router = crate::router::HybridRouter::new(&crate::config::EngineConfig::default());
         
         let start = Instant::now();
         // Passing an unknown intent that will miss L0 (UnionCode) and fallback to L1 (Vec101FallbackEngine)

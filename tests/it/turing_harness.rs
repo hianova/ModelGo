@@ -4,6 +4,7 @@ use model_go::router::Vec101FallbackEngine;
 use std::collections::HashMap;
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 struct TuringTest {
     id: u32,
     type_id: String,
@@ -84,7 +85,7 @@ fn run_turing_test_suite() {
     report.push_str(&format!("\n**Total Pass Rate**: {}/100\n", passed));
     
     // Write report artifact
-    fs::write("/Users/kuangtalin/.gemini/antigravity/brain/fb929997-6d0c-4bcb-818e-83deb67a1e8d/turing_report.md", report).expect("Failed to write report");
+    fs::write("target/turing_report.md", report).expect("Failed to write report");
     
     println!("Testing completed. Passed {}/100. See turing_report.md for details.", passed);
     assert!(passed >= 0); // Always pass the test runner itself, since we just want the report.
