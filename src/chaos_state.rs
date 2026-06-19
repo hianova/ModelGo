@@ -25,7 +25,6 @@ impl RngState {
         (self.seed as f32) / (u32::MAX as f32)
     }
 
-    /// Generates a Zipf-distributed random variable using inverse transform approximation.
     pub fn next_zipf(&mut self, tweak: &MicroTweak) -> f32 {
         let mut u = self.next_f32();
         if u == 0.0 {
@@ -36,7 +35,14 @@ impl RngState {
         let s_minus_1 = if s_minus_1 < 0.01 { 0.01 } else { s_minus_1 };
         
         let p = -1.0 / s_minus_1;
-        libm::powf(u, p)
+        let val = libm::powf(u, p);
+        
+        // Prevent massive mathematical overflow during extreme chaos
+        if val.is_infinite() || val > 10000.0 {
+            10000.0
+        } else {
+            val
+        }
     }
 }
 

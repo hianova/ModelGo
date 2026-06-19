@@ -60,7 +60,7 @@ fn test_adaptive_tweak() {
 
 #[test]
 fn test_serialization() {
-    let state = ChaosState::<2, 3>::new([1.5, -2.5, 3.14]);
+    let state = ChaosState::<2, 3>::new([1.5, -2.5, 3.123]);
     let bytes = state.to_bytes();
     assert_eq!(bytes.len(), 5 * 4); // 2 weights + 3 bases
 

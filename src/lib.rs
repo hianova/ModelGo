@@ -39,3 +39,10 @@ pub mod engine;
 pub use engine::Vec101Engine;
 
 pub mod daemon;
+pub mod watcher;
+pub mod agent_cli;
+
+pub mod universal_tensor;
+pub mod universal_solver;
+pub use universal_tensor::UniversalTensor;
+pub use universal_solver::{ObjectiveFunction, UniversalOptimizationEngine};

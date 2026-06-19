@@ -36,10 +36,10 @@ impl LevyOptimizer {
         initial_state: [f32; D]
     ) -> ([f32; D], f32, f32) {
         let start_time = Instant::now();
-        let mut current_state = initial_state.clone();
+        let mut current_state = initial_state;
         objective.constrain_state(&mut current_state);
         
-        let mut best_state = current_state.clone();
+        let mut best_state = current_state;
         let mut best_yield = objective.evaluate(&current_state);
         let mut current_yield = best_yield;
 
@@ -58,7 +58,7 @@ impl LevyOptimizer {
             let mut delta = [0.0; D];
             objective.scale_displacement(&chaos_state.base_values, &mut delta);
 
-            let mut next_state = current_state.clone();
+            let mut next_state = current_state;
             for i in 0..D {
                 next_state[i] += delta[i];
             }
@@ -83,7 +83,7 @@ impl LevyOptimizer {
 
             if accept {
                 current_yield = new_yield;
-                current_state = next_state.clone();
+                current_state = next_state;
 
                 if new_yield > best_yield {
                     best_yield = new_yield;

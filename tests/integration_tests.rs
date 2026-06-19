@@ -9,4 +9,5 @@ mod it {
     mod speculative_engine;
     mod system2_verifier;
     mod turing_harness;
+    mod universal_solver;
 }

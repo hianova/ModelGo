@@ -15,9 +15,15 @@ pub struct SelfEvolvingLoop {
 
 static GLOBAL_EVOLVER: OnceLock<SelfEvolvingLoop> = OnceLock::new();
 
+impl Default for SelfEvolvingLoop {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SelfEvolvingLoop {
     pub fn global() -> &'static SelfEvolvingLoop {
-        GLOBAL_EVOLVER.get_or_init(|| SelfEvolvingLoop::new())
+        GLOBAL_EVOLVER.get_or_init(SelfEvolvingLoop::new)
     }
     pub fn new() -> Self {
         Self {
@@ -43,7 +49,7 @@ impl SelfEvolvingLoop {
         };
 
         // Mathematically project the state forward
-        *current_state = step_forward_nd(current_state, &tweak, &mut *rng);
+        *current_state = step_forward_nd(current_state, &tweak, &mut rng);
 
         println!("[Self-Evolving Loop] Intercepted successful workflow. Advanced ChaosState. Base value: {:.4}", current_state.base_values[0]);
 

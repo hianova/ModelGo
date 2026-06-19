@@ -167,15 +167,13 @@ impl SpeculativeEngine {
         }
 
         // Graph traversal to find longest valid path starting from root
-        let mut max_depth = 0;
+        let mut max_depth = 1;
         let mut best_leaf = 0;
         let mut node_depth = vec![0; len];
         let mut is_valid = vec![false; len];
         
         is_valid[0] = true; // Root is always valid initially
         node_depth[0] = 1;
-        best_leaf = 0;
-        max_depth = 1;
 
         for i in 1..len {
             let p = draft_tree.tree_mask[i] as usize;

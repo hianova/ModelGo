@@ -2,7 +2,8 @@ use model_go::memory_mesh::*;
 
 #[test]
 fn test_cache_insertion_and_lookup() {
-    let mesh = MemoryMesh::new().unwrap();
+    let config = model_go::config::EngineConfig::default();
+    let mesh = MemoryMesh::new(&config).unwrap();
     let hash = 0x1234_5678;
     let state = "{\"action\": \"test\"}";
     
@@ -18,7 +19,8 @@ fn test_cache_insertion_and_lookup() {
 
 #[test]
 fn test_temporal_state_persistence() {
-    let mesh = MemoryMesh::new().unwrap();
+    let config = model_go::config::EngineConfig::default();
+    let mesh = MemoryMesh::new(&config).unwrap();
     let workflow_id = 42;
     
     let state_epoch_1 = vec![1, 2, 3, 4];

@@ -62,6 +62,12 @@ pub struct Vec101FallbackEngine {
     engine: Mutex<Option<Vec101Engine>>,
 }
 
+impl Default for Vec101FallbackEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Vec101FallbackEngine {
     pub fn new() -> Self {
         println!("[Vec101FallbackEngine] Spawning native Rust Gemma 2B engine...");
@@ -141,12 +147,11 @@ impl Vec101FallbackEngine {
     pub fn generate_parallel_mtp(&self, prompts: &[String]) -> Result<Vec<String>, String> {
         // [System 2] Intercept 3rd attempt of Rejection Sampling to simulate LLM self-correction
         // Since we don't have full vocabulary decode() in vec101 yet, we inject a valid AST here.
-        if let Some(first_prompt) = prompts.first() {
-            if first_prompt.matches("PREVIOUS ERROR:").count() >= 2 {
+        if let Some(first_prompt) = prompts.first()
+            && first_prompt.matches("PREVIOUS ERROR:").count() >= 2 {
                 println!("[LLM Native] (Simulated Self-Correction) Outputting valid pipe-separated AST.");
                 return Ok(vec!["1|999|".to_string()]);
             }
-        }
 
         println!("[L1 Fallback] Routing {} prompts to native Vec101 engine with MTP acceleration...", prompts.len());
         let mut drafts = Vec::new();
@@ -188,7 +193,7 @@ use std::sync::OnceLock;
 static FALLBACK_ENGINE: OnceLock<Vec101FallbackEngine> = OnceLock::new();
 
 pub fn get_fallback_engine() -> &'static Vec101FallbackEngine {
-    FALLBACK_ENGINE.get_or_init(|| Vec101FallbackEngine::new())
+    FALLBACK_ENGINE.get_or_init(Vec101FallbackEngine::new)
 }
 
 /// The Hybrid Router unifying L0 and L1

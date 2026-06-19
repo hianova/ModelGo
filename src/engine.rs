@@ -57,7 +57,7 @@ impl Vec101Engine {
         // Generate 64 tokens autoregressively for "段落生成" (paragraph generation)
         for token_idx in 0..64 {
             // Forward pass: Iterate through ALL layers for physical matrix operations
-            for (_layer_idx, layer) in layers.iter().enumerate() {
+            for layer in layers.iter() {
                 match &layer.data {
                     ArchivedSerializedLayerData::Bit1_58(blocks) => {
                         ctx.quant_type = QuantType::Bit1_58;
@@ -100,7 +100,7 @@ impl Vec101Engine {
         }
         
         for i in 0..batch_size {
-            results[i].push_str("]");
+            results[i].push(']');
         }
         
         results
@@ -141,7 +141,7 @@ impl Vec101Engine {
         let mut results = vec![String::new(); batch_size];
         for i in 0..batch_size {
             results[i].push_str(&prompts[i]);
-            results[i].push_str("\n");
+            results[i].push('\n');
         }
         let mut is_active = vec![true; batch_size];
         let layers = unsafe { &(*self.loader.archived_weights).layers };
@@ -151,7 +151,7 @@ impl Vec101Engine {
                 break; // All streams hit EOS
             }
 
-            for (_layer_idx, layer) in layers.iter().enumerate() {
+            for layer in layers.iter() {
                 match &layer.data {
                     ArchivedSerializedLayerData::Bit1_58(blocks) => {
                         ctx.quant_type = QuantType::Bit1_58;
@@ -211,7 +211,7 @@ impl Vec101Engine {
         let batch_size = 1;
         let mut out_buffer = vec![0.0f32; 4096];
         let x_stream = vec![0i8; 16 * 2048];
-        let s_stream = vec![1.0f32; 1];
+        let s_stream = [1.0f32; 1];
         
         let mut ctx = vec101_context {
             quant_type: QuantType::Bit1_58, 
@@ -392,8 +392,8 @@ impl Vec101Engine {
                     filename.hash(&mut hasher);
                     let file_id = hasher.finish() as u32;
                     
-                    if let Some(metadata_str) = mesh.get_workflow(file_id) {
-                        if let Ok(meta) = serde_json::from_str::<crate::daemon::DocumentMetadata>(&metadata_str) {
+                    if let Some(metadata_str) = mesh.get_workflow(file_id)
+                        && let Ok(meta) = serde_json::from_str::<crate::daemon::DocumentMetadata>(&metadata_str) {
                             // Match query against filename, vendor, or doc_type (case-insensitive)
                             let query_lower = query.to_lowercase();
                             if filename.to_lowercase().contains(&query_lower) 
@@ -406,7 +406,6 @@ impl Vec101Engine {
                                 break;
                             }
                         }
-                    }
                 }
             }
         }
@@ -433,7 +432,7 @@ impl Vec101Engine {
                 // Call real compute logic! Instead of std::thread::sleep, we run actual compute on the model!
                 let mut out_buffer = vec![0.0f32; 4096];
                 let x_stream = vec![0i8; 16 * 2048];
-                let s_stream = vec![1.0f32; 1];
+                let s_stream = [1.0f32; 1];
                 
                 let w_ptr = if let Some(loader) = &self.safetensors_loader {
                     // Get first tensor as a weight stream

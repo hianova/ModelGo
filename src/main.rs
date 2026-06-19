@@ -71,6 +71,12 @@ enum Commands {
         #[arg(short, long)]
         text: String,
     },
+    /// Start the interactive DOGMA-style Agent CLI with file watcher
+    Agent {
+        /// The Markdown file to watch for new tasks
+        #[arg(short, long, default_value = "待辦事項.md")]
+        watch: String,
+    },
 }
 
 #[tokio::main]
@@ -149,11 +155,10 @@ async fn main() -> anyhow::Result<()> {
                         let delimiter = if line.contains(';') { ';' } else { ',' };
                         let parts: Vec<&str> = line.split(delimiter).collect();
                         // Try to find Close column, assuming it's around index 4
-                        if parts.len() >= 5 {
-                            if let Ok(val) = parts[4].parse::<f64>() {
+                        if parts.len() >= 5
+                            && let Ok(val) = parts[4].parse::<f64>() {
                                 values.push(val);
                             }
-                        }
                     }
                     values
                 } else {
@@ -198,7 +203,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::FftBacktest { file } => {
-            let content = std::fs::read_to_string(&file)?;
+            let content = std::fs::read_to_string(file)?;
             // Attempt to parse as JSON array of f64/strings
             let parsed: Vec<serde_json::Value> = serde_json::from_str(&content)?;
             let mut prices: Vec<f64> = Vec::new();
@@ -259,6 +264,9 @@ async fn main() -> anyhow::Result<()> {
                 Ok(response) => println!("[Query Result]\n{}", response),
                 Err(e) => eprintln!("[Query Error] {}", e),
             }
+        }
+        Commands::Agent { watch } => {
+            model_go::agent_cli::run_agent(watch.clone()).await?;
         }
     }
     

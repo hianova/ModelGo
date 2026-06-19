@@ -3,7 +3,8 @@ use union_code::CompressedIntent;
 
 #[test]
 fn test_union_code_engine_route() {
-    let engine = UnionCodeEngine::new();
+    let config = model_go::config::EngineConfig::default();
+    let engine = UnionCodeEngine::new(&config);
     
     // Test basic valid route that should be handled by the fast path (FST / Cache)
     let result = engine.route("請幫我拿咖啡".as_bytes());

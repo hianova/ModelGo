@@ -18,6 +18,12 @@ pub struct FftChaosAnalyzer {
     planner: FftPlanner<f64>,
 }
 
+impl Default for FftChaosAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FftChaosAnalyzer {
     pub fn new() -> Self {
         Self {

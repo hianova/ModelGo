@@ -1,7 +1,9 @@
 pub mod assembly_funnel;
 pub mod levy_search;
+pub mod math_objective;
 
 pub use assembly_funnel::{AssemblyFunnel, FunnelObserver};
+pub use math_objective::*;
 
 /// A generic interface representing a scientific exploration or optimization objective.
 /// This allows the engine to run Physics, Math, Cybersecurity, or Biology without being coupled

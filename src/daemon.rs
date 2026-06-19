@@ -44,6 +44,12 @@ pub struct HeuristicsScheduler {
     pub simulated_temp: f64,
 }
 
+impl Default for HeuristicsScheduler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HeuristicsScheduler {
     pub fn new() -> Self {
         Self {
@@ -240,12 +246,11 @@ impl Daemon {
                 for i in 0..chars.len() - 3 {
                     if chars[i].is_ascii_digit() && chars[i+1].is_ascii_digit() && chars[i+2].is_ascii_digit() && chars[i+3].is_ascii_digit() {
                         let year: String = chars[i..i+4].iter().collect();
-                        if let Ok(y) = year.parse::<u32>() {
-                            if (2000..=2099).contains(&y) {
+                        if let Ok(y) = year.parse::<u32>()
+                            && (2000..=2099).contains(&y) {
                                 found_year = year;
                                 break;
                             }
-                        }
                     }
                 }
             }
@@ -324,12 +329,11 @@ impl Daemon {
                 for i in 0..chars.len() - 3 {
                     if chars[i].is_ascii_digit() && chars[i+1].is_ascii_digit() && chars[i+2].is_ascii_digit() && chars[i+3].is_ascii_digit() {
                         let year: String = chars[i..i+4].iter().collect();
-                        if let Ok(y) = year.parse::<u32>() {
-                            if (2000..=2099).contains(&y) {
+                        if let Ok(y) = year.parse::<u32>()
+                            && (2000..=2099).contains(&y) {
                                 found_year = year;
                                 break;
                             }
-                        }
                     }
                 }
             }

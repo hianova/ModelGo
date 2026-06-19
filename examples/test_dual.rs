@@ -7,7 +7,8 @@ fn main() {
     
     println!("=== 🧠 初始化大腦左半球 (BitNet 1.58-bit) ===");
     let start_left = Instant::now();
-    match Vec101Engine::new(bit1_path) {
+    let config = model_go::config::EngineConfig::default();
+    match Vec101Engine::new(bit1_path, config.clone()) {
         Ok(mut engine_left) => {
             println!("✅ 左半球 (Drafting & Routing) 載入完成！耗時: {:?}", start_left.elapsed());
             // Mock generate
@@ -20,7 +21,7 @@ fn main() {
 
     println!("\n=== 💡 初始化大腦右半球 (Gemma Q4_0) ===");
     let start_right = Instant::now();
-    match Vec101Engine::new(q4_path) {
+    match Vec101Engine::new(q4_path, config) {
         Ok(mut engine_right) => {
             println!("✅ 右半球 (Deep Inference & Generation) 載入完成！耗時: {:?}", start_right.elapsed());
             // Mock generate

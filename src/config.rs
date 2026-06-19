@@ -1,3 +1,4 @@
+#[derive(Debug, Clone)]
 pub struct EngineConfig {
     /// Number of threads for the vec101 execution context (prevents M1 efficiency core straggler effects).
     pub vec101_num_threads: usize,

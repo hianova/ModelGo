@@ -15,6 +15,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 hashbrown = "0.14.5"
 libm = "0.2.16"
+chrono = "0.4"
 UnionTranslator = { path = "../uniontranslator" }
 lazy_static = "1.4.0"
 rustfft = "6.2.0"

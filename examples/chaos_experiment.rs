@@ -18,7 +18,7 @@ fn main() {
     let mut min_chaos = u32::MAX;
     let mut max_chaos = 0;
     
-    let mut chaos_distribution = vec![0; 20]; // Count how many times it took N attempts
+    let mut chaos_distribution = [0; 20]; // Count how many times it took N attempts
 
     // Use a baseline seed
     let mut rng = RngState::new(0x2026);

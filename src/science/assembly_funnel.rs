@@ -47,7 +47,7 @@ impl<T: Clone> AssemblyFunnel<T> {
     /// Run the infinite evolution loop for the given objective.
     pub fn run_evolution_loop<O: ScienceObjective<T>, F: FunnelObserver>(&mut self, objective: &O, observer: &mut F) {
         let mut seed: usize = self.config.rng_seed as usize;
-        let start_time = Instant::now();
+        let _start_time = Instant::now();
         let mut global_iterations = 0u64;
         let mut total_found = 0;
         let mut generation = 0u64;
@@ -112,7 +112,7 @@ impl<T: Clone> AssemblyFunnel<T> {
                     let cv = chaos_state.base_values[0];
                     
                     // Lévy flight mutation scale mapping
-                    let mutation_scale = (0.01 + (cv.abs() as f32 * 0.1)).min(2.0);
+                    let mutation_scale = (0.01 + (cv.abs() * 0.1)).min(2.0);
 
                     seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
                     let child = objective.perturb(&candidate, mutation_scale, seed);
