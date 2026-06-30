@@ -1,8 +1,7 @@
 use clap::{Parser, Subcommand};
 use model_go::{
-    HybridRouter, IntentRouter, JitCompiler, SpatialIntentEngine, BoundingBox, 
-    ZeroCopyMmapReader, System2Verifier, OsDispatch, SelfEvolvingLoop,
-    BenchmarkSuite, FftChaosAnalyzer
+    BenchmarkSuite, BoundingBox, FftChaosAnalyzer, HybridRouter, IntentRouter, JitCompiler,
+    OsDispatch, SelfEvolvingLoop, SpatialIntentEngine, System2Verifier, ZeroCopyMmapReader,
 };
 
 #[derive(Parser)]
@@ -77,10 +76,20 @@ enum Commands {
         #[arg(short, long, default_value = "待辦事項.md")]
         watch: String,
     },
+    /// Trigger the Scientific Discovery Loop (Chaos -> Decision -> Distillation -> Archive)
+    Discovery,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
+    std::thread::Builder::new()
+        .stack_size(64 * 1024 * 1024) // 64MB stack
+        .spawn(|| tokio::runtime::Runtime::new().unwrap().block_on(run_cli()))
+        .unwrap()
+        .join()
+        .unwrap()
+}
+
+async fn run_cli() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {
@@ -88,33 +97,56 @@ async fn main() -> anyhow::Result<()> {
             println!("Memory mapping file: {}", file);
             let reader = ZeroCopyMmapReader::new(file)?;
             let bytes = reader.as_bytes();
-            println!("Successfully mapped {} bytes using Zero-Copy IPC.", bytes.len());
+            println!(
+                "Successfully mapped {} bytes using Zero-Copy IPC.",
+                bytes.len()
+            );
         }
         Commands::Route { text } => {
             println!("Routing Intent for text: \"{}\"", text);
             let router = HybridRouter::new(&model_go::config::EngineConfig::default());
-            
+
             match router.route(text.as_bytes()) {
                 Ok((intent, parameters)) => {
-                    println!("[Router Success] Resolved to OpCode: 0x{:02X}, PayloadID: 0x{:04X}, Params: {:?}", intent.opcode, intent.payload_id, parameters);
+                    println!(
+                        "[Router Success] Resolved to OpCode: 0x{:02X}, PayloadID: 0x{:04X}, Params: {:?}",
+                        intent.opcode, intent.payload_id, parameters
+                    );
                 }
                 Err(e) => {
-                    eprintln!("[Router Error] Failed to route intent. Error code: 0x{:02X}", e);
+                    eprintln!(
+                        "[Router Error] Failed to route intent. Error code: 0x{:02X}",
+                        e
+                    );
                 }
             }
         }
         Commands::Jit { prompt } => {
             JitCompiler::compile_and_execute(prompt, None)?;
         }
-        Commands::Spatial { x, y, w, h, annotation } => {
-            let bbox = BoundingBox { x: *x, y: *y, width: *w, height: *h };
+        Commands::Spatial {
+            x,
+            y,
+            w,
+            h,
+            annotation,
+        } => {
+            let bbox = BoundingBox {
+                x: *x,
+                y: *y,
+                width: *w,
+                height: *h,
+            };
             SpatialIntentEngine::trigger(bbox, annotation)?;
         }
         Commands::Verify => {
             println!("Starting System 2 Verification Loop...");
             let initial_prompt = "Generate a JSON response for transferring $10 to Alice.";
             match System2Verifier::execute_with_rejection_sampling(initial_prompt, 3) {
-                Ok(ast) => println!("\n[Final Output] Successfully acquired valid AST: {:?}", ast),
+                Ok(ast) => println!(
+                    "\n[Final Output] Successfully acquired valid AST: {:?}",
+                    ast
+                ),
                 Err(e) => eprintln!("\n[Final Output] All retries failed. System panic: {}", e),
             }
         }
@@ -124,7 +156,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Macro => {
             println!("Starting Self-Evolving Macro Discovery...");
             let evolver = SelfEvolvingLoop::new();
-            
+
             // Mock a specific workflow being successfully executed 3 times
             let dummy_ast = model_go::UnionAst {
                 opcode: 32,
@@ -143,7 +175,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::FftChaos { file } => {
             println!("Starting FFT Chaos Analysis...");
             let mut analyzer = FftChaosAnalyzer::new();
-            
+
             let data = if let Some(path) = file {
                 println!("Reading data from {}", path);
                 let content = std::fs::read_to_string(path)?;
@@ -156,9 +188,10 @@ async fn main() -> anyhow::Result<()> {
                         let parts: Vec<&str> = line.split(delimiter).collect();
                         // Try to find Close column, assuming it's around index 4
                         if parts.len() >= 5
-                            && let Ok(val) = parts[4].parse::<f64>() {
-                                values.push(val);
-                            }
+                            && let Ok(val) = parts[4].parse::<f64>()
+                        {
+                            values.push(val);
+                        }
                     }
                     values
                 } else {
@@ -166,7 +199,9 @@ async fn main() -> anyhow::Result<()> {
                     values
                 }
             } else {
-                println!("No file provided. Generating mock stock market data (Random Walk + Sine + White Noise)...");
+                println!(
+                    "No file provided. Generating mock stock market data (Random Walk + Sine + White Noise)..."
+                );
                 let mut mock_data = Vec::with_capacity(512);
                 let mut current_price = 100.0;
                 let mut seed = 1337;
@@ -176,21 +211,27 @@ async fn main() -> anyhow::Result<()> {
                     seed ^= seed >> 17;
                     seed ^= seed << 5;
                     let noise = (seed as f64) / (u32::MAX as f64) * 2.0 - 1.0;
-                    
+
                     // drift + cyclic + noise
                     current_price += 0.05 + 0.5 * ((i as f64) / 10.0).sin() + noise;
                     mock_data.push(current_price);
                 }
                 mock_data
             };
-            
+
             println!("Analyzing {} data points...", data.len());
             if let Some(metrics) = analyzer.analyze_time_series(&data) {
                 println!("\n--- FFT Chaos Analysis Results ---");
-                println!("Spectral Entropy: {:.4} (0.0 = Predictable Cyclic, 1.0 = Chaotic White Noise)", metrics.spectral_entropy);
-                println!("Dominant Frequency Index: {}", metrics.dominant_frequency_index);
+                println!(
+                    "Spectral Entropy: {:.4} (0.0 = Predictable Cyclic, 1.0 = Chaotic White Noise)",
+                    metrics.spectral_entropy
+                );
+                println!(
+                    "Dominant Frequency Index: {}",
+                    metrics.dominant_frequency_index
+                );
                 println!("Dominant Power Ratio: {:.4}", metrics.dominant_power_ratio);
-                
+
                 if metrics.spectral_entropy > 0.7 {
                     println!("Conclusion: Highly Chaotic (Market is noisy and unpredictable)");
                 } else if metrics.spectral_entropy > 0.4 {
@@ -227,7 +268,7 @@ async fn main() -> anyhow::Result<()> {
                     if let Some(metrics) = analyzer.analyze_time_series(window) {
                         let ma: f64 = window.iter().sum::<f64>() / window_size as f64;
                         let current_price = prices[i];
-                        
+
                         if !holding {
                             // Inverted Entry: Market turns chaotic or Downtrend
                             if metrics.spectral_entropy > 0.45 || current_price < ma {
@@ -244,7 +285,7 @@ async fn main() -> anyhow::Result<()> {
                         }
                     }
                 }
-                
+
                 // Close any open positions at the end
                 if holding {
                     mark.push(buy_idx);
@@ -259,7 +300,10 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Query { text } => {
             // Assume 1.58-bit model or any model placeholder path
-            let mut engine = model_go::Vec101Engine::new("placeholder_path", model_go::config::EngineConfig::default())?;
+            let mut engine = model_go::Vec101Engine::new(
+                "placeholder_path",
+                model_go::config::EngineConfig::default(),
+            )?;
             match engine.query_with_page_fault(text) {
                 Ok(response) => println!("[Query Result]\n{}", response),
                 Err(e) => eprintln!("[Query Error] {}", e),
@@ -268,7 +312,53 @@ async fn main() -> anyhow::Result<()> {
         Commands::Agent { watch } => {
             model_go::agent_cli::run_agent(watch.clone()).await?;
         }
+        Commands::Discovery => {
+            println!("Starting Scientific Discovery Loop...");
+            std::thread::Builder::new()
+                .stack_size(32 * 1024 * 1024) // 32MB stack
+                .spawn(|| {
+                    use model_go::chaos_state::{ChaosState, MicroTweak, RngState, step_forward_nd_with_hook};
+                    use model_go::decision_engine::{DecisionEngine, TopologyDiff};
+                    
+                    let mut current_state = ChaosState::<10, 1>::new([0.0]);
+                    let tweak = MicroTweak { s_exponent: 1.5, max_elements: 1000 };
+                    let mut rng = RngState::new(0xABCD);
+                    
+                    for i in 1..=100 {
+                        let old_base = current_state.base_values[0];
+                        let mut captured_diff: Option<TopologyDiff> = None;
+                        
+                        current_state = step_forward_nd_with_hook(&current_state, &tweak, &mut rng, |dim, impact| {
+                            if impact.abs() > 10.0 {
+                                println!("\n[Discovery Iteration {}] BlackSwan Event detected! Massive shift: {:.4}", i, impact);
+                                captured_diff = Some(TopologyDiff {
+                                    old_state: vec![old_base],
+                                    new_state: vec![old_base + impact],
+                                    score_jump: impact.abs(),
+                                    dimension: dim,
+                                });
+                            }
+                        });
+                        
+                        if let Some(diff) = captured_diff {
+                            let diff_bytes = rkyv::to_bytes::<_, 256>(&diff).unwrap();
+                            if let Ok(result) = DecisionEngine::evaluate_mutation(&diff_bytes)
+                                && let (model_go::decision_engine::RiskRating::Low, Some(rule)) = (result.decision.risk_rating, &result.extracted_rule) {
+                                    // Assume a mock intent hash for this specific problem domain
+                                    let mock_intent_hash = 123456789;
+                                    model_go::SelfEvolvingLoop::global().register_theory(mock_intent_hash, rule);
+                            }
+                            // Reset to avoid looping on the exact same anomaly
+                            current_state.base_values[0] = 0.0;
+                        }
+                    }
+                    println!("Discovery Loop finished.");
+                })
+                .unwrap()
+                .join()
+                .unwrap();
+        }
     }
-    
+
     Ok(())
 }

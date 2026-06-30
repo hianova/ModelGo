@@ -28,9 +28,11 @@ pub fn evaluate_rpn(expr: &[i8; 16], x_val: f32) -> Option<f32> {
                 -2 => a - b,
                 -3 => a * b,
                 -4 => {
-                    if b.abs() < 1e-6 { return None; }
+                    if b.abs() < 1e-6 {
+                        return None;
+                    }
                     a / b
-                },
+                }
                 _ => return None,
             };
             if !res.is_finite() || res.abs() > 1e10 {
@@ -52,17 +54,22 @@ pub struct MathObjective {
 }
 
 impl ScienceObjective<[i8; 16]> for MathObjective {
-    fn evaluate_fitness(&self, candidate: &[i8; 16]) -> f32 {
-        let mut mse = 0.0;
+    fn evaluate_fitness(&self, candidate: &[i8; 16]) -> (u32, u32) {
+        let mut total_loss = 0.0;
+
         for &(x, y) in &self.dataset {
             if let Some(pred) = evaluate_rpn(candidate, x) {
                 let diff = pred - y;
-                mse += diff * diff;
+                total_loss += diff * diff;
             } else {
-                return 999999.0; // Penalty for invalid runtime evaluation (e.g., div by zero)
+                return (999999, 16); // Penalty for invalid runtime evaluation
             }
         }
-        mse / self.dataset.len() as f32
+
+        // Mock Pareto format: Error (u32) and Complexity (u32, e.g. number of non-zero tokens)
+        let loss_u32 = (total_loss / self.dataset.len() as f32 * 1000.0) as u32;
+        let complexity = candidate.iter().filter(|&&c| c != 0).count() as u32;
+        (loss_u32, complexity)
     }
 
     fn generate_seed(&self, mut seed: usize, parent: Option<&[i8; 16]>) -> [i8; 16] {
@@ -72,17 +79,17 @@ impl ScienceObjective<[i8; 16]> for MathObjective {
 
         let mut candidate = [0_i8; 16];
         let mut stack = 0;
-        for i in 0..16 {
+        for val in &mut candidate {
             seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
             let rnd = (seed % 100) as i8;
-            
+
             // Ensure we don't underflow the stack by biasing towards operands initially
             if stack < 2 || (rnd % 2 == 0) {
-                let op = if (rnd % 3) == 0 { 127 } else { rnd % 10 + 1  };
-                candidate[i] = op;
+                let op = if (rnd % 3) == 0 { 127 } else { rnd % 10 + 1 };
+                *val = op;
                 stack += 1;
             } else {
-                candidate[i] = -((rnd % 4) + 1);
+                *val = -((rnd % 4) + 1);
                 stack -= 1;
             }
         }
@@ -93,13 +100,13 @@ impl ScienceObjective<[i8; 16]> for MathObjective {
         let mut child = *candidate;
         // Map scale to number of tokens to mutate (1 to 4)
         let num_mutations = (scale * 4.0).ceil() as usize;
-        
+
         for _ in 0..num_mutations {
             seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
             let idx = seed % 16;
             seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
             let rnd = seed % 100;
-            
+
             if rnd < 30 {
                 child[idx] = 127; // X
             } else if rnd < 60 {
@@ -116,35 +123,50 @@ impl ScienceObjective<[i8; 16]> for MathObjective {
     fn is_valid(&self, candidate: &[i8; 16]) -> bool {
         let mut stack_depth = 0;
         for &token in candidate {
-            if token == 0 { continue; }
+            if token == 0 {
+                continue;
+            }
             if token > 0 {
                 stack_depth += 1;
             } else {
-                if stack_depth < 2 { return false; }
+                if stack_depth < 2 {
+                    return false;
+                }
                 stack_depth -= 1;
             }
         }
         stack_depth == 1
     }
 
-    fn check_archival(&self, candidate: &[i8; 16], fitness: f32) -> bool {
-        if fitness < 0.001 {
+    fn check_archival(&self, candidate: &[i8; 16], fitness: (u32, u32)) -> bool {
+        if fitness.0 < 1 {
+            // Threshold for success
             println!("\n\n============================================================");
             println!("🚨 [ALERT] UNIVERSAL LAW DISCOVERED! 🚨");
             println!("============================================================");
-            println!("=> Time Elapsed : {:.3} seconds", self.start_time.elapsed().as_secs_f64());
-            println!("=> MSE Fitness  : {:.6}", fitness);
+            println!(
+                "=> Time Elapsed : {:.3} seconds",
+                self.start_time.elapsed().as_secs_f64()
+            );
+            println!("=> Pareto Fitness (Loss, Complexity) : {:?}", fitness);
             print!("=> RPN Formula  : ");
             for &t in candidate {
-                if t == 127 { print!("X "); }
-                else if t > 0 { print!("{} ", t); }
-                else if t == -1 { print!("+ "); }
-                else if t == -2 { print!("- "); }
-                else if t == -3 { print!("* "); }
-                else if t == -4 { print!("/ "); }
+                if t == 127 {
+                    print!("X ");
+                } else if t > 0 {
+                    print!("{} ", t);
+                } else if t == -1 {
+                    print!("+ ");
+                } else if t == -2 {
+                    print!("- ");
+                } else if t == -3 {
+                    print!("* ");
+                } else if t == -4 {
+                    print!("/ ");
+                }
             }
             println!("\n");
-            
+
             println!("=> [Lean 4 Fallback Interface]");
             println!("   - Converting Abstract Syntax Tree (AST) to Formal Tactics...");
             println!("   - Lean 4 Theorem Prover Verification: ✅ SUCCESS");
@@ -153,5 +175,49 @@ impl ScienceObjective<[i8; 16]> for MathObjective {
             return true;
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_evaluate_rpn() {
+        let mut expr = [0_i8; 16];
+        expr[0] = 127;
+        expr[1] = 127;
+        expr[2] = -3;
+        assert_eq!(evaluate_rpn(&expr, 5.0), Some(25.0));
+
+        let mut expr2 = [0_i8; 16];
+        expr2[0] = 10;
+        expr2[1] = 2;
+        expr2[2] = -4;
+        assert_eq!(evaluate_rpn(&expr2, 0.0), Some(5.0));
+
+        let mut expr3 = [0_i8; 16];
+        expr3[0] = -1;
+        assert_eq!(evaluate_rpn(&expr3, 0.0), None);
+    }
+
+    #[test]
+    fn test_math_objective() {
+        let obj = MathObjective {
+            dataset: vec![(1.0, 1.0)],
+            start_time: Instant::now(),
+        };
+        let mut expr = [0_i8; 16];
+        expr[0] = 127;
+        let (loss, complexity) = obj.evaluate_fitness(&expr);
+        assert_eq!(loss, 0);
+        assert_eq!(complexity, 1);
+
+        let seed = obj.generate_seed(42, None);
+        let _valid = obj.is_valid(&seed);
+        let _perturbed = obj.perturb(&seed, 0.5, 42);
+
+        assert!(obj.check_archival(&expr, (0, 1)));
+        assert!(!obj.check_archival(&expr, (5, 1)));
     }
 }

@@ -1,20 +1,20 @@
+use crate::jit_compiler::JitCompiler;
 use anyhow::Result;
 use union_code::CompressedIntent;
-use crate::jit_compiler::JitCompiler;
 
 // 動作 (OpCode - Verb)
-pub const OP_QUERY: u8     = 0x10; // 查 (16)
-pub const OP_ACQUIRE: u8   = 0x20; // 拿/買/送 (32)
-pub const OP_CONTROL: u8   = 0x30; // 控制/調整 (48)
+pub const OP_QUERY: u8 = 0x10; // 查 (16)
+pub const OP_ACQUIRE: u8 = 0x20; // 拿/買/送 (32)
+pub const OP_CONTROL: u8 = 0x30; // 控制/調整 (48)
 pub const OP_TELEMETRY: u8 = 0x80; // 電腦電量 (128)
 
 // 實體物 (PayloadID - Noun)
-pub const PAY_INVOICE: u16    = 0x00FF; // 發票
-pub const PAY_COFFEE: u16     = 0x0A42; // 咖啡
-pub const PAY_TEA: u16        = 0x0A43; // 茶
-pub const PAY_WATER: u16      = 0x0A44; // 水
+pub const PAY_INVOICE: u16 = 0x00FF; // 發票
+pub const PAY_COFFEE: u16 = 0x0A42; // 咖啡
+pub const PAY_TEA: u16 = 0x0A43; // 茶
+pub const PAY_WATER: u16 = 0x0A44; // 水
 pub const PAY_BRIGHTNESS: u16 = 0x00A1; // 亮度
-pub const PAY_BATTERY: u16    = 0xFFFF; // 電量
+pub const PAY_BATTERY: u16 = 0xFFFF; // 電量
 
 fn query_macos_battery() -> Result<String> {
     println!("[ModelGo OS Dispatch] Querying macOS battery status...");
@@ -22,9 +22,9 @@ fn query_macos_battery() -> Result<String> {
         .arg("-g")
         .arg("batt")
         .output()?;
-        
+
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     // Basic extraction of battery percentage (e.g. "100%")
     let mut percentage = "未知";
     for word in stdout.split_whitespace() {
@@ -36,14 +36,17 @@ fn query_macos_battery() -> Result<String> {
     Ok(percentage.to_string())
 }
 
-/// Process a natural language intent by routing it through the HybridRouter 
+/// Process a natural language intent by routing it through the HybridRouter
 /// and executing the appropriate physical OS action or JIT compiled script.
 pub fn process_intent(
-    intent: CompressedIntent, 
-    intent_raw_str: &str, 
-    dynamic_params: Option<serde_json::Value>
+    intent: CompressedIntent,
+    intent_raw_str: &str,
+    dynamic_params: Option<serde_json::Value>,
 ) -> Result<String> {
-    println!("\n[ModelGo] Dispatching binary intent: OpCode 0x{:02X}, PayloadID 0x{:04X}, Params: {:?}", intent.opcode, intent.payload_id, dynamic_params);
+    println!(
+        "\n[ModelGo] Dispatching binary intent: OpCode 0x{:02X}, PayloadID 0x{:04X}, Params: {:?}",
+        intent.opcode, intent.payload_id, dynamic_params
+    );
 
     match (intent.opcode, intent.payload_id) {
         // 1. 查詢發票 (0x10, 0x00FF)
@@ -51,7 +54,7 @@ pub fn process_intent(
             JitCompiler::compile_and_execute(intent_raw_str, dynamic_params)?;
             Ok("已經成功將發票下載至 ~/Documents/Invoices 目錄。".to_string())
         }
-        
+
         // 2. 調整螢幕亮度 (0x30, 0x00A1)
         (OP_CONTROL, PAY_BRIGHTNESS) => {
             println!("[ModelGo OS Dispatch] Adjusting physical screen brightness...");
@@ -63,15 +66,9 @@ pub fn process_intent(
         }
 
         // 3. 取得咖啡/茶/水 (0x20, 咖啡系列)
-        (OP_ACQUIRE, PAY_COFFEE) => {
-            Ok("咖啡機已啟動，正在為您沖煮一杯熱美式咖啡。".to_string())
-        }
-        (OP_ACQUIRE, PAY_TEA) => {
-            Ok("茶飲機已啟動，正在為您沖泡一杯經典紅茶。".to_string())
-        }
-        (OP_ACQUIRE, PAY_WATER) => {
-            Ok("飲水機已啟動，正在為您準備一杯溫水。".to_string())
-        }
+        (OP_ACQUIRE, PAY_COFFEE) => Ok("咖啡機已啟動，正在為您沖煮一杯熱美式咖啡。".to_string()),
+        (OP_ACQUIRE, PAY_TEA) => Ok("茶飲機已啟動，正在為您沖泡一杯經典紅茶。".to_string()),
+        (OP_ACQUIRE, PAY_WATER) => Ok("飲水機已啟動，正在為您準備一杯溫水。".to_string()),
 
         // 4. 查詢電腦電量 (0x80, PAY_BATTERY)
         (OP_TELEMETRY, PAY_BATTERY) | (OP_TELEMETRY, _) => {
@@ -84,5 +81,65 @@ pub fn process_intent(
             JitCompiler::compile_and_execute(intent_raw_str, dynamic_params)?;
             Ok("指令已成功透過 JIT 腳本執行完畢。".to_string())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_process_intent_constants() {
+        assert_eq!(OP_QUERY, 0x10);
+        assert_eq!(OP_ACQUIRE, 0x20);
+        assert_eq!(OP_CONTROL, 0x30);
+        assert_eq!(OP_TELEMETRY, 0x80);
+    }
+
+    #[test]
+    fn test_process_intent_coffee() {
+        let intent = CompressedIntent {
+            opcode: OP_ACQUIRE,
+            payload_id: PAY_COFFEE,
+        };
+        let result = process_intent(intent, "Get coffee", None).unwrap();
+        assert!(result.contains("咖啡機已啟動"));
+    }
+
+    #[test]
+    fn test_process_intent_tea() {
+        let intent = CompressedIntent {
+            opcode: OP_ACQUIRE,
+            payload_id: PAY_TEA,
+        };
+        let result = process_intent(intent, "Get tea", None).unwrap();
+        assert!(result.contains("茶飲機"));
+    }
+
+    #[test]
+    fn test_process_intent_water() {
+        let intent = CompressedIntent {
+            opcode: OP_ACQUIRE,
+            payload_id: PAY_WATER,
+        };
+        let result = process_intent(intent, "Get water", None).unwrap();
+        assert!(result.contains("飲水機"));
+    }
+
+    #[test]
+    fn test_process_intent_brightness() {
+        let intent = CompressedIntent {
+            opcode: OP_CONTROL,
+            payload_id: PAY_BRIGHTNESS,
+        };
+        let params = serde_json::json!({"brightness": 80});
+        let result = process_intent(intent, "brightness", Some(params)).unwrap();
+        assert!(result.contains("80%"));
+    }
+
+    #[test]
+    fn test_query_macos_battery() {
+        let res = query_macos_battery();
+        assert!(res.is_ok());
     }
 }

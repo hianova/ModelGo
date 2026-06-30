@@ -1,5 +1,5 @@
-use criterion::{criterion_group, criterion_main, Criterion, black_box};
-use model_go::{MemoryMesh, System2Verifier, HybridRouter, IntentRouter};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use model_go::{HybridRouter, IntentRouter, MemoryMesh, System2Verifier};
 
 fn bench_rejection_sampling(c: &mut Criterion) {
     c.bench_function("rejection_sampling", |b| {
@@ -15,7 +15,7 @@ fn bench_memory_mesh_cache(c: &mut Criterion) {
     let mesh = MemoryMesh::new(&config).unwrap();
     let hash = 0x12345;
     mesh.cache_intent_success(hash, "test state".to_string());
-    
+
     c.bench_function("dualcache_ff_hit", |b| {
         b.iter(|| {
             // Wait-free static cache lookup benchmark
@@ -57,5 +57,11 @@ fn bench_router_fast_path(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_rejection_sampling, bench_memory_mesh_cache, bench_chaos_learning_step, bench_router_fast_path);
+criterion_group!(
+    benches,
+    bench_rejection_sampling,
+    bench_memory_mesh_cache,
+    bench_chaos_learning_step,
+    bench_router_fast_path
+);
 criterion_main!(benches);

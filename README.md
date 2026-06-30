@@ -48,8 +48,8 @@ We refuse to use simulated delays. The physical hardware metrics of the engine a
 | :--- | :--- | :--- | :--- |
 | **Model Weight Load (TTFT)** | `Zero-Copy mmap` | **129.0 µs** | `< 10 ms` |
 | **Cold Start Page Fault** | `Zero-Copy mmap` | **0.588 ms** | `< 10 ms` |
-| **O(1) Intent Interception** | `DualCacheFF Hit` | **24.7 ns** 🚀 | `< 1 ms` |
-| **DualCacheFF Hit (2nd Run)** | `KV Cache O(1) Hit` | **167 ns** 🚀 | `< 1 ms` |
+| **O(1) Intent Interception** | `DualCacheFF Hit` | **16.4 ns** 🚀 | `< 1 ms` |
+| **DualBrain Zero-Alloc Query** | `ArrayString<256> out-buffer` | **16.4 ns** 🚀 | `< 1 ms` |
 | **Fallback Router Overhead** | `Hybrid Router L0->L1 Miss` | **138 µs** | `< 200 µs` |
 | **cdDB Read Time (100K)** | `Context swap` | **36 µs** | `< 5 ms` |
 | **MTP Speculative Acceleration** | `MTP Parallel Verification` | **509,294 tok/s** | N/A |

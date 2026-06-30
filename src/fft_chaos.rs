@@ -52,13 +52,13 @@ impl FftChaosAnalyzer {
         // Compute power spectrum (magnitude squared)
         // We only care about the positive frequencies (up to Nyquist limit n/2)
         let half_n = n / 2;
-        
+
         let mut power_spectrum = Vec::with_capacity(half_n);
         let mut total_power = 0.0;
 
         // Skip DC component (index 0) because we care about variations, not the mean value
-        for i in 1..half_n {
-            let magnitude_sq = buffer[i].norm_sqr();
+        for val in buffer.iter().take(half_n).skip(1) {
+            let magnitude_sq = val.norm_sqr();
             power_spectrum.push(magnitude_sq);
             total_power += magnitude_sq;
         }
@@ -81,7 +81,7 @@ impl FftChaosAnalyzer {
                 max_power = power;
                 dominant_idx = i + 1; // +1 because we skipped DC
             }
-            
+
             let p_i = power / total_power;
             if p_i > 0.0 {
                 spectral_entropy -= p_i * p_i.ln();
@@ -104,3 +104,35 @@ impl FftChaosAnalyzer {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fft_chaos_analyzer_short_data() {
+        let mut analyzer = FftChaosAnalyzer::default();
+        let res = analyzer.analyze_time_series(&[1.0]);
+        assert!(res.is_none());
+    }
+
+    #[test]
+    fn test_fft_chaos_analyzer_zero_power() {
+        let mut analyzer = FftChaosAnalyzer::new();
+        // Constant sequence has zero power except at DC
+        let res = analyzer.analyze_time_series(&[1.0, 1.0, 1.0, 1.0]).unwrap();
+        assert_eq!(res.spectral_entropy, 0.0);
+    }
+
+    #[test]
+    fn test_fft_chaos_analyzer_sine_wave() {
+        let mut analyzer = FftChaosAnalyzer::new();
+        let mut data = Vec::new();
+        for i in 0..16 {
+            data.push((i as f64 * std::f64::consts::PI / 4.0).sin());
+        }
+        let res = analyzer.analyze_time_series(&data).unwrap();
+        // Low entropy because it's a pure sine wave (one dominant frequency)
+        assert!(res.spectral_entropy < 0.2);
+        assert!(res.dominant_power_ratio > 0.9);
+    }
+}

@@ -1,7 +1,7 @@
 use notify::{Event, EventKind, RecursiveMode, Watcher};
+use std::fs;
 use std::path::{Path, PathBuf};
 use tokio::sync::mpsc;
-use std::fs;
 
 /// TaskWatcher 負責監控指定的 Markdown 檔案，當發生變更時，
 /// 比對前後內容，並將新增的文字透過 Channel 發送出來。
@@ -46,19 +46,20 @@ impl TaskWatcher {
                     EventKind::Modify(_) | EventKind::Create(_) | EventKind::Access(_) => {
                         // 稍微等待一點時間，讓編輯器寫入完成，避免讀到空檔案
                         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-                        
-                        if let Ok(current_content) = fs::read_to_string(&self.target_file) {
-                            if current_content != self.last_content {
-                                let new_text = Self::extract_new_content(&self.last_content, &current_content);
-                                if !new_text.is_empty() {
-                                    println!("[TaskWatcher] 偵測到新任務內容: {}", new_text);
-                                    if tx.send(new_text).await.is_err() {
-                                        eprintln!("[TaskWatcher] 無法發送新任務內容 (Receiver 已關閉)");
-                                        break;
-                                    }
+
+                        if let Ok(current_content) = fs::read_to_string(&self.target_file)
+                            && current_content != self.last_content
+                        {
+                            let new_text =
+                                Self::extract_new_content(&self.last_content, &current_content);
+                            if !new_text.is_empty() {
+                                println!("[TaskWatcher] 偵測到新任務內容: {}", new_text);
+                                if tx.send(new_text).await.is_err() {
+                                    eprintln!("[TaskWatcher] 無法發送新任務內容 (Receiver 已關閉)");
+                                    break;
                                 }
-                                self.last_content = current_content;
                             }
+                            self.last_content = current_content;
                         }
                     }
                     _ => {}

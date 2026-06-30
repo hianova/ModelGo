@@ -1,11 +1,11 @@
+use anyhow::Result;
+use notify::{EventKind, RecursiveMode, Watcher, event::ModifyKind};
+use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
 use std::thread;
-use std::fs;
-use anyhow::Result;
-use notify::{Watcher, RecursiveMode, EventKind, event::ModifyKind};
-use serde::{Deserialize, Serialize};
+use std::time::Duration;
 
 #[cfg(target_os = "macos")]
 #[link(name = "CoreGraphics", kind = "framework")]
@@ -18,22 +18,25 @@ unsafe extern "C" {
 unsafe extern "C" {
     fn objc_getClass(name: *const u8) -> *mut std::ffi::c_void;
     fn sel_registerName(name: *const u8) -> *mut std::ffi::c_void;
-    fn objc_msgSend(obj: *mut std::ffi::c_void, sel: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+    fn objc_msgSend(
+        obj: *mut std::ffi::c_void,
+        sel: *mut std::ffi::c_void,
+    ) -> *mut std::ffi::c_void;
 }
 
 #[cfg(target_os = "macos")]
 fn get_macos_thermal_state() -> i64 {
     unsafe {
-        let class_ptr = objc_getClass(b"NSProcessInfo\0".as_ptr());
+        let class_ptr = objc_getClass(c"NSProcessInfo".as_ptr() as *const u8);
         if class_ptr.is_null() {
             return 0;
         }
-        let sel_info = sel_registerName(b"processInfo\0".as_ptr());
+        let sel_info = sel_registerName(c"processInfo".as_ptr() as *const u8);
         let info_ptr = objc_msgSend(class_ptr, sel_info);
         if info_ptr.is_null() {
             return 0;
         }
-        let sel_state = sel_registerName(b"thermalState\0".as_ptr());
+        let sel_state = sel_registerName(c"thermalState".as_ptr() as *const u8);
         objc_msgSend(info_ptr, sel_state) as i64
     }
 }
@@ -70,7 +73,9 @@ impl HeuristicsScheduler {
     pub fn is_safe_to_run(&mut self) -> bool {
         // Rule A: Check if processing user request
         if IS_PROCESSING_REQUEST.load(Ordering::SeqCst) {
-            println!("[Daemon Sleep] ModelGo is processing a user request. Pausing background tasks...");
+            println!(
+                "[Daemon Sleep] ModelGo is processing a user request. Pausing background tasks..."
+            );
             return false;
         }
 
@@ -83,9 +88,12 @@ impl HeuristicsScheduler {
                 idle_seconds = CGEventSourceSecondsSinceLastEventType(0, !0);
             }
         }
-        
+
         if idle_seconds < 300.0 {
-            println!("[Daemon Sleep] User is active (idle for {:.1}s < 300s). Pausing...", idle_seconds);
+            println!(
+                "[Daemon Sleep] User is active (idle for {:.1}s < 300s). Pausing...",
+                idle_seconds
+            );
             return false;
         }
 
@@ -93,15 +101,22 @@ impl HeuristicsScheduler {
         #[cfg(target_os = "macos")]
         {
             let state = get_macos_thermal_state();
-            if state >= 2 { // 2 = Serious, 3 = Critical
-                println!("[Daemon Sleep] CPU thermal level is serious or critical ({}). Pausing...", state);
+            if state >= 2 {
+                // 2 = Serious, 3 = Critical
+                println!(
+                    "[Daemon Sleep] CPU thermal level is serious or critical ({}). Pausing...",
+                    state
+                );
                 return false;
             }
         }
         #[cfg(not(target_os = "macos"))]
         {
             if self.simulated_temp >= 60.0 {
-                println!("[Daemon Sleep] CPU Temp too high ({:.1}°C). Cooling down...", self.simulated_temp);
+                println!(
+                    "[Daemon Sleep] CPU Temp too high ({:.1}°C). Cooling down...",
+                    self.simulated_temp
+                );
                 return false;
             }
         }
@@ -124,7 +139,7 @@ pub struct DocumentMetadata {
 impl Daemon {
     pub fn run() -> Result<()> {
         println!("[Daemon] Starting background Heuristics Scheduler and Tagging Service...");
-        
+
         // Ensure data directory exists
         let data_dir = PathBuf::from("./data");
         if !data_dir.exists() {
@@ -146,11 +161,11 @@ impl Daemon {
                             EventKind::Create(_) => {
                                 println!("[Daemon] Detected new file: {:?}", path);
                                 Self::process_new_file(&path);
-                            },
+                            }
                             EventKind::Modify(ModifyKind::Data(_)) => {
                                 println!("[Daemon] Detected file modification: {:?}", path);
                                 Self::invalidate_cache(&path);
-                            },
+                            }
                             _ => {}
                         }
                     }
@@ -170,33 +185,8 @@ impl Daemon {
     }
 
     fn extract_clean_text(path: &Path) -> Result<String> {
-        let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-        match ext.to_lowercase().as_str() {
-            "pdf" => {
-                let text = pdf_extract::extract_text(path).unwrap_or_else(|_| String::new());
-                Ok(text)
-            },
-            "xlsx" => {
-                use calamine::{Reader, open_workbook_auto, Data};
-                let mut excel = open_workbook_auto(path).map_err(|e| anyhow::anyhow!("Excel error: {}", e))?;
-                let mut text = String::new();
-                if let Some(Ok(r)) = excel.worksheet_range_at(0) {
-                    for row in r.rows() {
-                        for cell in row.iter() {
-                            if let Data::String(s) = cell {
-                                text.push_str(s);
-                                text.push(' ');
-                            }
-                        }
-                    }
-                }
-                Ok(text)
-            },
-            _ => {
-                // Default to raw string read for txt or others
-                Ok(fs::read_to_string(path).unwrap_or_else(|_| String::new()))
-            }
-        }
+        // Only allow raw text processing to maintain absolute dependency purity
+        Ok(fs::read_to_string(path).unwrap_or_else(|_| String::new()))
     }
 
     fn process_new_file(path: &Path) {
@@ -217,9 +207,12 @@ impl Daemon {
         let filename = path.file_name().unwrap().to_string_lossy().to_string();
         let filename_lower = filename.to_lowercase();
         let text_lower = text.to_lowercase();
-        
+
         // Dynamic heuristic metadata extraction
-        let doc_type = if filename_lower.contains("contract") || text_lower.contains("contract") || text_lower.contains("agreement") {
+        let doc_type = if filename_lower.contains("contract")
+            || text_lower.contains("contract")
+            || text_lower.contains("agreement")
+        {
             "contract".to_string()
         } else if filename_lower.contains("invoice") || text_lower.contains("invoice") {
             "invoice".to_string()
@@ -244,13 +237,18 @@ impl Daemon {
             let chars: Vec<char> = filename.chars().chain(text.chars().take(1000)).collect();
             if chars.len() >= 4 {
                 for i in 0..chars.len() - 3 {
-                    if chars[i].is_ascii_digit() && chars[i+1].is_ascii_digit() && chars[i+2].is_ascii_digit() && chars[i+3].is_ascii_digit() {
-                        let year: String = chars[i..i+4].iter().collect();
+                    if chars[i].is_ascii_digit()
+                        && chars[i + 1].is_ascii_digit()
+                        && chars[i + 2].is_ascii_digit()
+                        && chars[i + 3].is_ascii_digit()
+                    {
+                        let year: String = chars[i..i + 4].iter().collect();
                         if let Ok(y) = year.parse::<u32>()
-                            && (2000..=2099).contains(&y) {
-                                found_year = year;
-                                break;
-                            }
+                            && (2000..=2099).contains(&y)
+                        {
+                            found_year = year;
+                            break;
+                        }
                     }
                 }
             }
@@ -267,44 +265,59 @@ impl Daemon {
 
         let _preview: String = text.chars().take(500).collect();
         println!("[Daemon] Left Brain (1.58-bit) analyzing 500-char preview...");
-        
+
         // Execute 0-Token generation logit classification to eliminate decoding overhead
         let engine = crate::router::get_fallback_engine();
         // Assume candidate tokens [1, 2, 3] map to Document Categories (e.g., Contract, Invoice, Report)
-        let _ = engine.classify_logits(&format!("Classify Document Type: {}", _preview), &[1, 2, 3]);
+        let _ =
+            engine.classify_logits(&format!("Classify Document Type: {}", _preview), &[1, 2, 3]);
 
         // Write to cdDB
         let mesh = crate::memory_mesh::MemoryMesh::global();
-        use std::hash::{Hash, Hasher};
         use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
         let mut hasher = DefaultHasher::new();
         metadata.filename.hash(&mut hasher);
         let file_id = hasher.finish() as u32;
 
         let json_data = serde_json::to_string(&metadata).unwrap();
         mesh.persist_workflow(file_id, &json_data);
-        
-        println!("[Daemon] Successfully stored metadata tag in cdDB: {}", json_data);
+
+        println!(
+            "[Daemon] Successfully stored metadata tag in cdDB: {}",
+            json_data
+        );
     }
 
     fn invalidate_cache(path: &Path) {
-        use std::hash::{Hash, Hasher};
         use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
         let filename = path.file_name().unwrap().to_string_lossy().to_string();
         let mut hasher = DefaultHasher::new();
         filename.hash(&mut hasher);
         let session_id = hasher.finish() as u32;
 
-        println!("[Daemon] Cache Invalidation Triggered! Purging KV Blocks for {:?}", filename);
-        let kv_cache = crate::tiered_kv::TieredKVCache::new(session_id, 2048, 16, &crate::config::EngineConfig::default());
+        println!(
+            "[Daemon] Cache Invalidation Triggered! Purging KV Blocks for {:?}",
+            filename
+        );
+        let kv_cache = crate::tiered_kv::TieredKVCache::new(
+            session_id,
+            2048,
+            16,
+            &crate::config::EngineConfig::default(),
+        );
         kv_cache.invalidate_blocks(0, 100);
 
         // Extract metadata dynamically from the modified file
         let text = Self::extract_clean_text(path).unwrap_or_default();
         let filename_lower = filename.to_lowercase();
         let text_lower = text.to_lowercase();
-        
-        let doc_type = if filename_lower.contains("contract") || text_lower.contains("contract") || text_lower.contains("agreement") {
+
+        let doc_type = if filename_lower.contains("contract")
+            || text_lower.contains("contract")
+            || text_lower.contains("agreement")
+        {
             "contract".to_string()
         } else if filename_lower.contains("invoice") || text_lower.contains("invoice") {
             "invoice".to_string()
@@ -327,13 +340,18 @@ impl Daemon {
             let chars: Vec<char> = filename.chars().chain(text.chars().take(1000)).collect();
             if chars.len() >= 4 {
                 for i in 0..chars.len() - 3 {
-                    if chars[i].is_ascii_digit() && chars[i+1].is_ascii_digit() && chars[i+2].is_ascii_digit() && chars[i+3].is_ascii_digit() {
-                        let year: String = chars[i..i+4].iter().collect();
+                    if chars[i].is_ascii_digit()
+                        && chars[i + 1].is_ascii_digit()
+                        && chars[i + 2].is_ascii_digit()
+                        && chars[i + 3].is_ascii_digit()
+                    {
+                        let year: String = chars[i..i + 4].iter().collect();
                         if let Ok(y) = year.parse::<u32>()
-                            && (2000..=2099).contains(&y) {
-                                found_year = year;
-                                break;
-                            }
+                            && (2000..=2099).contains(&y)
+                        {
+                            found_year = year;
+                            break;
+                        }
                     }
                 }
             }
@@ -352,6 +370,9 @@ impl Daemon {
         let mesh = crate::memory_mesh::MemoryMesh::global();
         let json_data = serde_json::to_string(&metadata).unwrap();
         mesh.persist_workflow(session_id, &json_data);
-        println!("[Daemon] Metadata downgraded to 'unprocessed' for {:?}", filename);
+        println!(
+            "[Daemon] Metadata downgraded to 'unprocessed' for {:?}",
+            filename
+        );
     }
 }

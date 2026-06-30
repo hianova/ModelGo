@@ -30,13 +30,13 @@ impl RngState {
         if u == 0.0 {
             u = 0.000001; // Avoid division by zero
         }
-        
+
         let s_minus_1 = tweak.s_exponent - 1.0;
         let s_minus_1 = if s_minus_1 < 0.01 { 0.01 } else { s_minus_1 };
-        
+
         let p = -1.0 / s_minus_1;
         let val = libm::powf(u, p);
-        
+
         // Prevent massive mathematical overflow during extreme chaos
         if val.is_infinite() || val > 10000.0 {
             10000.0
@@ -68,7 +68,9 @@ pub struct ChaosState<const N: usize, const D: usize> {
 impl<const N: usize, const D: usize> ChaosState<N, D> {
     pub fn new(initial_values: [f32; D]) -> Self {
         let mut weights = [0.0; N];
-        if N > 0 { weights[0] = 1.0; } // Default to first branch taking full probability
+        if N > 0 {
+            weights[0] = 1.0;
+        } // Default to first branch taking full probability
         Self {
             macro_weights: weights,
             base_values: initial_values,
@@ -103,19 +105,19 @@ impl<const N: usize, const D: usize> ChaosState<N, D> {
         }
         let mut macro_weights = [0.0; N];
         let mut base_values = [0.0; D];
-        
+
         let mut offset = 0;
-        for i in 0..N {
-            let chunk = data.get(offset..offset+4)?;
-            macro_weights[i] = f32::from_le_bytes(chunk.try_into().ok()?);
+        for val in &mut macro_weights {
+            let chunk = data.get(offset..offset + 4)?;
+            *val = f32::from_le_bytes(chunk.try_into().ok()?);
             offset += 4;
         }
-        for i in 0..D {
-            let chunk = data.get(offset..offset+4)?;
-            base_values[i] = f32::from_le_bytes(chunk.try_into().ok()?);
+        for val in &mut base_values {
+            let chunk = data.get(offset..offset + 4)?;
+            *val = f32::from_le_bytes(chunk.try_into().ok()?);
             offset += 4;
         }
-        
+
         Some(Self {
             macro_weights,
             base_values,
@@ -153,38 +155,38 @@ pub fn step_forward_nd_with_hook<const N: usize, const D: usize, F>(
     tweak: &MicroTweak,
     rng: &mut RngState,
     mut on_black_swan: F,
-) -> ChaosState<N, D> 
-where 
-    F: FnMut(usize, f32) // Passes dimension index and extreme value impact
+) -> ChaosState<N, D>
+where
+    F: FnMut(usize, f32), // Passes dimension index and extreme value impact
 {
     let mut next_weights = [0.0; N];
     let mut next_bases = current.base_values;
-    
-    for i in 0..N {
+
+    for (i, w_next) in next_weights.iter_mut().enumerate() {
         let w = current.macro_weights[i];
-        
+
         let r = rng.next_zipf(tweak);
         let direction = if rng.next_f32() > 0.5 { 1.0 } else { -1.0 };
         let impact = w * r * direction;
-        
+
         // N-Dimensional Multi-variate Levy Flight Jump
-        for dim in 0..D {
+        for (dim, val) in next_bases.iter_mut().enumerate() {
             // Apply a slight dimension-specific variance multiplier
-            let dim_variance = (rng.next_f32() * 2.0) - 1.0; 
+            let dim_variance = (rng.next_f32() * 2.0) - 1.0;
             let final_impact = impact * dim_variance;
-            
-            next_bases[dim] += final_impact;
- 
+
+            *val += final_impact;
+
             // Trigger Black Swan Event Hook if impact is extremely massive (e.g. > 10.0 or < -10.0)
             if libm::fabsf(final_impact) > 10.0 {
                 on_black_swan(dim, final_impact);
             }
         }
-        
+
         let volatility = libm::fabsf(impact);
-        next_weights[i] = w + volatility * 0.01;
+        *w_next = w + volatility * 0.01;
     }
-    
+
     normalize_weights(&mut next_weights);
 
     ChaosState {
@@ -193,3 +195,71 @@ where
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct DummyFeedback {
+        grad: f32,
+    }
+    impl StagnationFeedback for DummyFeedback {
+        fn current_gradient(&self) -> f32 {
+            self.grad
+        }
+    }
+
+    #[test]
+    fn test_rng_state() {
+        let mut rng = RngState::new(42);
+        let val1 = rng.next_f32();
+        let val2 = rng.next_f32();
+        assert!((0.0..1.0).contains(&val1));
+        assert_ne!(val1, val2);
+
+        let tweak = MicroTweak {
+            s_exponent: 1.5,
+            max_elements: 1000,
+        };
+        let z = rng.next_zipf(&tweak);
+        assert!(z > 0.0);
+    }
+
+    #[test]
+    fn test_chaos_state_serialization() {
+        let state = ChaosState::<2, 3>::new([1.0, 2.0, 3.0]);
+        let bytes = state.to_bytes();
+        let state2 = ChaosState::<2, 3>::from_bytes(&bytes).unwrap();
+        assert_eq!(state.base_values, state2.base_values);
+        assert_eq!(state.macro_weights, state2.macro_weights);
+
+        assert!(ChaosState::<2, 3>::from_bytes(&[0; 4]).is_none());
+    }
+
+    #[test]
+    fn test_adapt_tweak() {
+        let state = ChaosState::<1, 1>::new([0.0]);
+        let mut tweak = MicroTweak {
+            s_exponent: 2.0,
+            max_elements: 1000,
+        };
+        state.adapt_tweak(&mut tweak, &DummyFeedback { grad: 1.0 });
+        // target_s = 3.0 - 1.9 = 1.1
+        assert!((tweak.s_exponent - 1.1).abs() < 1e-4);
+    }
+
+    #[test]
+    fn test_step_forward() {
+        let current = ChaosState::<2, 1>::new([0.0]);
+        let tweak = MicroTweak {
+            s_exponent: 2.0,
+            max_elements: 1000,
+        };
+        let mut rng = RngState::new(123);
+
+        let next = step_forward_nd(&current, &tweak, &mut rng);
+        assert_ne!(current.base_values, next.base_values);
+
+        let sum: f32 = next.macro_weights.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-4);
+    }
+}

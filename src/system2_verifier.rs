@@ -15,15 +15,19 @@ impl System2Verifier {
     /// Simulates the parsing and validation of a drafted response from vec101.
     pub fn parse_and_verify(draft_output: &str) -> Result<UnionAst> {
         println!("[Union Parser] Verifying draft output...");
-        
+
         let parts: Vec<&str> = draft_output.trim().split('|').collect();
         if parts.len() < 2 {
             bail!("Syntax Error: Expected at least OpCode|PayloadID");
         }
 
-        let opcode = parts[0].parse::<u8>().map_err(|e| anyhow::anyhow!("Invalid OpCode: {}", e))?;
-        let payload_id = parts[1].parse::<u32>().map_err(|e| anyhow::anyhow!("Invalid PayloadID: {}", e))?;
-        
+        let opcode = parts[0]
+            .parse::<u8>()
+            .map_err(|e| anyhow::anyhow!("Invalid OpCode: {}", e))?;
+        let payload_id = parts[1]
+            .parse::<u32>()
+            .map_err(|e| anyhow::anyhow!("Invalid PayloadID: {}", e))?;
+
         if opcode == 0 {
             bail!("Invalid Opcode 0 provided. Must be non-zero.");
         }
@@ -41,12 +45,15 @@ impl System2Verifier {
     }
 
     /// Rejection Sampling Loop: Wraps vec101 calls and retries on failure.
-    pub fn execute_with_rejection_sampling(initial_prompt: &str, max_retries: u32) -> Result<UnionAst> {
+    pub fn execute_with_rejection_sampling(
+        initial_prompt: &str,
+        max_retries: u32,
+    ) -> Result<UnionAst> {
         let mut _current_prompt = initial_prompt.to_string();
 
         for attempt in 1..=max_retries {
             println!("\n[System 2] Attempt {}/{}", attempt, max_retries);
-            
+
             let engine = crate::router::get_fallback_engine();
             let prompts = vec![_current_prompt.clone()];
             let results = engine.generate_parallel(&prompts);
@@ -67,13 +74,17 @@ impl System2Verifier {
                     println!("[System 2] Validation Failed: {}", e);
                     println!("[Rejection Sampling] Injecting Error Trace into prompt for retry.");
                     // Append error trace for the next iteration
-                    _current_prompt = format!("{}\n\nPREVIOUS ERROR:\n{}\nFix the syntax to follow the pipe-separated format: OpCode|PayloadID|Arg1...", _current_prompt, e);
+                    _current_prompt = format!(
+                        "{}\n\nPREVIOUS ERROR:\n{}\nFix the syntax to follow the pipe-separated format: OpCode|PayloadID|Arg1...",
+                        _current_prompt, e
+                    );
                 }
             }
         }
 
-        bail!("Failed to generate a valid AST after {} attempts", max_retries)
+        bail!(
+            "Failed to generate a valid AST after {} attempts",
+            max_retries
+        )
     }
 }
-
-

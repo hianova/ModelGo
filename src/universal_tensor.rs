@@ -1,7 +1,7 @@
 //! Universal Tensor Abstraction
-//! 
+//!
 //! Provides a domain-agnostic representation of a mathematical state.
-//! Can represent anything from 3D biological lattice coordinates to 
+//! Can represent anything from 3D biological lattice coordinates to
 //! multi-dimensional logic gate routing weights.
 
 use core::f32;
@@ -44,5 +44,28 @@ impl<const D: usize> UniversalTensor<D> {
 impl<const D: usize> Default for UniversalTensor<D> {
     fn default() -> Self {
         Self { values: [0.0; D] }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_universal_tensor() {
+        let t1 = UniversalTensor::<3>::new([1.0, 2.0, 3.0]);
+        let mut t2 = UniversalTensor::<3>::default();
+
+        assert_eq!(t1.as_slice(), &[1.0, 2.0, 3.0]);
+        assert_eq!(t2.as_slice(), &[0.0, 0.0, 0.0]);
+
+        t2.as_mut_slice()[0] = 1.0;
+        t2.as_mut_slice()[1] = 2.0;
+        t2.as_mut_slice()[2] = 3.0;
+
+        assert_eq!(t1.distance(&t2), 0.0);
+
+        let t3 = UniversalTensor::<3>::new([4.0, 6.0, 3.0]);
+        assert_eq!(t1.distance(&t3), 5.0);
     }
 }

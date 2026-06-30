@@ -1,8 +1,8 @@
 use memmap2::Mmap;
+use safetensors::SafeTensors;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
-use safetensors::SafeTensors;
 
 /// An f16 type represented as u16 for strict no_std compatibility.
 #[allow(non_camel_case_types)]
@@ -25,7 +25,7 @@ pub struct SerializedVec101SuperBlock {
     pub scales: [f16; 8],
     pub offsets: [i16; 8],
     pub _padding: [u8; 32],
-    pub blocks: [SerializedVec101Block; 8], 
+    pub blocks: [SerializedVec101Block; 8],
 }
 
 #[repr(C)]
@@ -33,8 +33,8 @@ pub struct SerializedVec101SuperBlock {
 #[archive(check_bytes)]
 #[archive_attr(repr(C))]
 pub struct SerializedBlockQ4_0 {
-    pub d: f16,           
-    pub qs: [u8; 16],     
+    pub d: f16,
+    pub qs: [u8; 16],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
@@ -73,13 +73,17 @@ impl ZeroCopyModelLoader {
     pub fn new<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         let file = File::open(path)?;
         let mmap = unsafe { Mmap::map(&file)? };
-        
+
         // Use check_archived_root to safely validate the data
-        let archived = rkyv::check_archived_root::<SerializedModelWeights>(&mmap)
-            .expect("Failed to validate rkyv archive format");
-            
+        let archived = rkyv::check_archived_root::<SerializedModelWeights>(&mmap).map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Failed to validate rkyv archive format: {:?}", e),
+            )
+        })?;
+
         let archived_ptr = archived as *const ArchivedSerializedModelWeights;
-        
+
         Ok(Self {
             _mmap: mmap,
             archived_weights: archived_ptr,
@@ -102,7 +106,7 @@ impl SafetensorsMmapLoader {
     pub fn new<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         let file = File::open(path)?;
         let mmap = unsafe { Mmap::map(&file)? };
-        
+
         let mut tensors = HashMap::new();
         // Since SafeTensors::deserialize expects bytes and doesn't own them,
         // we parse the header, then get raw pointers.
@@ -110,10 +114,35 @@ impl SafetensorsMmapLoader {
         for (name, tensor) in st.tensors() {
             tensors.insert(name.clone(), tensor.data().as_ptr());
         }
-        
+
         Ok(Self {
             _mmap: mmap,
             tensors,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_loader_fail() {
+        assert!(ZeroCopyModelLoader::new("/does/not/exist.bin").is_err());
+        assert!(SafetensorsMmapLoader::new("/does/not/exist.safetensors").is_err());
+    }
+
+    #[test]
+    fn test_zero_copy_loader_success() {
+        let weights = SerializedModelWeights { layers: vec![] };
+        let bytes = rkyv::to_bytes::<_, 256>(&weights).unwrap();
+
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write_all(&bytes).unwrap();
+
+        let loader = ZeroCopyModelLoader::new(temp_file.path());
+        assert!(loader.is_ok());
     }
 }

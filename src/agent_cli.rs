@@ -1,6 +1,6 @@
+use crate::{IntentRouter, MemoryMesh, SelfEvolvingLoop, UnionAst};
 use std::io::{self, Write};
 use tokio::io::{AsyncBufReadExt, BufReader};
-use crate::{IntentRouter, MemoryMesh, SelfEvolvingLoop, UnionAst};
 
 /// 狀態機：描述 Agent 目前處於哪一個對話或執行階段
 #[derive(Debug, Clone, PartialEq)]
@@ -18,12 +18,12 @@ pub async fn run_agent(watch_path: String) -> anyhow::Result<()> {
         Ok(m) => m,
         Err(e) => {
             eprintln!("[ModelGo Agent] 無法初始化 MemoryMesh: {}", e);
-            return Err(e.into());
+            return Err(e);
         }
     };
     let evolver = SelfEvolvingLoop::new();
     let mut workflow_id: u32 = 0;
-    
+
     let mut state = AgentState::Idle;
     let mut stdin_reader = BufReader::new(tokio::io::stdin()).lines();
 
@@ -83,107 +83,120 @@ pub async fn run_agent(watch_path: String) -> anyhow::Result<()> {
         let json_record = serde_json::json!({
             "timestamp": chrono::Utc::now().to_rfc3339(),
             "input_text": line,
-        }).to_string();
+        })
+        .to_string();
         memory_mesh.persist_workflow(workflow_id, &json_record);
-        println!("[ModelGo Memory] 成功將任務寫入 cdDB 超長上下文 (ID: {})", workflow_id);
+        println!(
+            "[ModelGo Memory] 成功將任務寫入 cdDB 超長上下文 (ID: {})",
+            workflow_id
+        );
 
         // 狀態機轉移邏輯
         match state {
-            AgentState::Idle => {
-                match router.route(line.as_bytes()) {
-                    Ok((intent, parameters)) => {
-                        println!("[ModelGo Router] 成功擷取意圖：OpCode 0x{:02X}, PayloadID 0x{:04X}", intent.opcode, intent.payload_id);
-                        if let Some(ref p) = parameters {
-                            println!("[ModelGo Router] 動態參數擷取成功: {:?}", p);
-                        }
-                        
-                        let args = match &parameters {
-                            Some(serde_json::Value::Object(map)) => {
-                                map.values().map(|v| v.to_string()).collect::<Vec<String>>()
-                            }
-                            Some(serde_json::Value::Array(arr)) => {
-                                arr.iter().map(|v| v.to_string()).collect::<Vec<String>>()
-                            }
-                            _ => vec![],
-                        };
+            AgentState::Idle => match router.route(line.as_bytes()) {
+                Ok((intent, parameters)) => {
+                    println!(
+                        "[ModelGo Router] 成功擷取意圖：OpCode 0x{:02X}, PayloadID 0x{:04X}",
+                        intent.opcode, intent.payload_id
+                    );
+                    if let Some(ref p) = parameters {
+                        println!("[ModelGo Router] 動態參數擷取成功: {:?}", p);
+                    }
 
-                        let ast = UnionAst {
-                            opcode: intent.opcode,
-                            payload_id: intent.payload_id as u32,
-                            arguments: args,
-                        };
+                    let args = match &parameters {
+                        Some(serde_json::Value::Object(map)) => {
+                            map.values().map(|v| v.to_string()).collect::<Vec<String>>()
+                        }
+                        Some(serde_json::Value::Array(arr)) => {
+                            arr.iter().map(|v| v.to_string()).collect::<Vec<String>>()
+                        }
+                        _ => vec![],
+                    };
 
-                        if evolver.intercept_success(&ast) {
-                            println!("============================================================");
-                            println!("🧠 [ModelGo 大腦] 偵測到高頻任務模式，已突破數學混沌閾值！");
-                            println!("🚀 [ModelGo 大腦] 正在將此流程壓縮為 O(1) 短路巨集...");
-                            println!("============================================================");
-                        }
-                        
-                        match intent.opcode {
-                            0x11 | crate::process_intent::OP_ACQUIRE => {
-                                state = AgentState::AwaitingCoffeeSelection;
-                            }
-                            0x15 => {
-                                state = AgentState::AwaitingRefundConfirmation;
-                            }
-                            _ => {
-                                println!("[ModelGo Exec] 未知或無須選項的 OpCode，交由物理層直接處決...");
-                                match crate::process_intent(intent, &line, parameters) {
-                                    Ok(res) => println!("[ModelGo 結果] {}", res),
-                                    Err(e) => eprintln!("[ModelGo 錯誤] {}", e),
-                                }
-                            }
-                        }
+                    let ast = UnionAst {
+                        opcode: intent.opcode,
+                        payload_id: intent.payload_id as u32,
+                        arguments: args,
+                    };
+
+                    if evolver.intercept_success(&ast) {
+                        println!("============================================================");
+                        println!("🧠 [ModelGo 大腦] 偵測到高頻任務模式，已突破數學混沌閾值！");
+                        println!("🚀 [ModelGo 大腦] 正在將此流程壓縮為 O(1) 短路巨集...");
+                        println!("============================================================");
                     }
-                    Err(e) => {
-                        println!("[ModelGo Router] L0/L1 路由未命中 (Err 0x{:02X})，嘗試 fallback 物理層...", e);
-                        match crate::process_intent(union_code::CompressedIntent { opcode: 0, payload_id: 0 }, &line, None) {
-                            Ok(res) => println!("[ModelGo 結果] {}", res),
-                            Err(err) => println!("[ModelGo 錯誤] {}", err),
+
+                    match intent.opcode {
+                        0x11 | crate::process_intent::OP_ACQUIRE => {
+                            state = AgentState::AwaitingCoffeeSelection;
+                        }
+                        0x15 => {
+                            state = AgentState::AwaitingRefundConfirmation;
+                        }
+                        _ => {
+                            println!(
+                                "[ModelGo Exec] 未知或無須選項的 OpCode，交由物理層直接處決..."
+                            );
+                            match crate::process_intent(intent, &line, parameters) {
+                                Ok(res) => println!("[ModelGo 結果] {}", res),
+                                Err(e) => eprintln!("[ModelGo 錯誤] {}", e),
+                            }
                         }
                     }
                 }
-            }
-            AgentState::AwaitingCoffeeSelection => {
-                match line.as_str() {
-                    "1" | "美式" => {
-                        println!("[ModelGo Exec] 送出二進位 Intent -> OpCode: 0x12 (確認美式)");
-                        println!("[ModelGo 結果] 交易成功，熱美式開始沖泡！");
-                        state = AgentState::Idle;
-                    }
-                    "2" | "拿鐵" => {
-                        println!("[ModelGo Exec] 送出二進位 Intent -> OpCode: 0x13 (確認拿鐵)");
-                        println!("[ModelGo 結果] 交易成功，冰拿鐵開始沖泡！");
-                        state = AgentState::Idle;
-                    }
-                    "c" | "cancel" | "取消" => {
-                        println!("[ModelGo Exec] 送出二進位 Intent -> OpCode: 0x15 (取消操作)");
-                        println!("[ModelGo 結果] 操作已取消。");
-                        state = AgentState::Idle;
-                    }
-                    _ => {
-                        println!("[ModelGo 錯誤] 無效選項，請重新輸入。");
+                Err(e) => {
+                    println!(
+                        "[ModelGo Router] L0/L1 路由未命中 (Err 0x{:02X})，嘗試 fallback 物理層...",
+                        e
+                    );
+                    match crate::process_intent(
+                        union_code::CompressedIntent {
+                            opcode: 0,
+                            payload_id: 0,
+                        },
+                        &line,
+                        None,
+                    ) {
+                        Ok(res) => println!("[ModelGo 結果] {}", res),
+                        Err(err) => println!("[ModelGo 錯誤] {}", err),
                     }
                 }
-            }
-            AgentState::AwaitingRefundConfirmation => {
-                match line.to_lowercase().as_str() {
-                    "y" | "yes" | "確定" => {
-                        println!("[ModelGo Exec] 送出二進位 Intent -> OpCode: 0x16 (確認退款)");
-                        println!("[ModelGo 結果] 退款已完成，款項已退回原帳戶。");
-                        state = AgentState::Idle;
-                    }
-                    "n" | "no" | "取消" => {
-                        println!("[ModelGo Exec] 送出二進位 Intent -> 取消退款");
-                        println!("[ModelGo 結果] 已取消退款程序。");
-                        state = AgentState::Idle;
-                    }
-                    _ => {
-                        println!("[ModelGo 錯誤] 無效選項，請重新輸入。");
-                    }
+            },
+            AgentState::AwaitingCoffeeSelection => match line.as_str() {
+                "1" | "美式" => {
+                    println!("[ModelGo Exec] 送出二進位 Intent -> OpCode: 0x12 (確認美式)");
+                    println!("[ModelGo 結果] 交易成功，熱美式開始沖泡！");
+                    state = AgentState::Idle;
                 }
-            }
+                "2" | "拿鐵" => {
+                    println!("[ModelGo Exec] 送出二進位 Intent -> OpCode: 0x13 (確認拿鐵)");
+                    println!("[ModelGo 結果] 交易成功，冰拿鐵開始沖泡！");
+                    state = AgentState::Idle;
+                }
+                "c" | "cancel" | "取消" => {
+                    println!("[ModelGo Exec] 送出二進位 Intent -> OpCode: 0x15 (取消操作)");
+                    println!("[ModelGo 結果] 操作已取消。");
+                    state = AgentState::Idle;
+                }
+                _ => {
+                    println!("[ModelGo 錯誤] 無效選項，請重新輸入。");
+                }
+            },
+            AgentState::AwaitingRefundConfirmation => match line.to_lowercase().as_str() {
+                "y" | "yes" | "確定" => {
+                    println!("[ModelGo Exec] 送出二進位 Intent -> OpCode: 0x16 (確認退款)");
+                    println!("[ModelGo 結果] 退款已完成，款項已退回原帳戶。");
+                    state = AgentState::Idle;
+                }
+                "n" | "no" | "取消" => {
+                    println!("[ModelGo Exec] 送出二進位 Intent -> 取消退款");
+                    println!("[ModelGo 結果] 已取消退款程序。");
+                    state = AgentState::Idle;
+                }
+                _ => {
+                    println!("[ModelGo 錯誤] 無效選項，請重新輸入。");
+                }
+            },
         }
     }
 

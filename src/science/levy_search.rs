@@ -31,14 +31,14 @@ impl LevyOptimizer {
 
     /// Run the chaotic Lévy flight search on the given objective.
     pub fn optimize<const D: usize, O: ChaoticObjective<D>>(
-        &self, 
-        objective: &O, 
-        initial_state: [f32; D]
+        &self,
+        objective: &O,
+        initial_state: [f32; D],
     ) -> ([f32; D], f32, f32) {
         let start_time = Instant::now();
         let mut current_state = initial_state;
         objective.constrain_state(&mut current_state);
-        
+
         let mut best_state = current_state;
         let mut best_yield = objective.evaluate(&current_state);
         let mut current_yield = best_yield;
@@ -54,7 +54,7 @@ impl LevyOptimizer {
         for _ in 0..self.max_iters {
             // Mathematical phase space mutation
             chaos_state = step_forward_nd(&chaos_state, &tweak, &mut rng);
-            
+
             let mut delta = [0.0; D];
             objective.scale_displacement(&chaos_state.base_values, &mut delta);
 
@@ -75,11 +75,7 @@ impl LevyOptimizer {
             let cv = cv_sq.sqrt();
 
             // Simulated Annealing logic: Accept if better, OR if chaos jump is massive (escaping traps)
-            let accept = if diff > 0.0 {
-                true
-            } else {
-                cv > 1.5
-            };
+            let accept = if diff > 0.0 { true } else { cv > 1.5 };
 
             if accept {
                 current_yield = new_yield;
@@ -90,12 +86,36 @@ impl LevyOptimizer {
                     best_state = next_state;
                 }
             }
-            
+
             // Reset base values so next jump is from the current location
             // The macro_weights (probability cloud) continue to evolve.
             chaos_state.base_values = [0.0; D];
         }
 
         (best_state, best_yield, start_time.elapsed().as_secs_f32())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct DummyObjective;
+    impl ChaoticObjective<1> for DummyObjective {
+        fn evaluate(&self, state: &[f32; 1]) -> f32 {
+            -(state[0] - 5.0).abs() // Peak at 5.0
+        }
+        fn scale_displacement(&self, raw_chaos: &[f32; 1], delta: &mut [f32; 1]) {
+            delta[0] = raw_chaos[0];
+        }
+        fn constrain_state(&self, _state: &mut [f32; 1]) {}
+    }
+
+    #[test]
+    fn test_levy_optimizer() {
+        let opt = LevyOptimizer::new(10);
+        let obj = DummyObjective;
+        let (_, _, time) = opt.optimize(&obj, [0.0]);
+        assert!(time >= 0.0);
     }
 }
