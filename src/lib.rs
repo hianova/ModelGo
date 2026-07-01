@@ -2,15 +2,19 @@ pub mod benchmarks;
 pub mod biology_router;
 pub mod chaos_state;
 pub mod config;
+
 pub mod dual_brain;
 pub mod ffi;
 pub mod fft_chaos;
 pub mod jit_compiler;
 pub mod loader;
+
 pub mod markdown_diffusion;
 pub mod memory_mesh;
 pub mod mmap_reader;
+
 pub mod os_dispatch;
+
 pub mod pdf_kit;
 pub mod process_intent;
 pub mod router;
@@ -19,8 +23,10 @@ pub mod spatial;
 pub mod speculative_engine;
 pub mod system2_verifier;
 pub mod temporal_filter;
+
 pub mod video_toolbox;
 pub mod visual_cache;
+
 pub mod zero_chunker;
 
 pub mod science;
@@ -31,6 +37,7 @@ pub use fft_chaos::FftChaosAnalyzer;
 pub use jit_compiler::JitCompiler;
 pub use memory_mesh::MemoryMesh;
 pub use mmap_reader::ZeroCopyMmapReader;
+
 pub use os_dispatch::OsDispatch;
 pub use process_intent::process_intent;
 pub use router::{HybridRouter, IntentRouter, UnionCodeEngine, Vec101FallbackEngine};
@@ -45,7 +52,9 @@ pub use decision_engine::{DecisionEngine, DecisionResult, ExternalDataSource, Ri
 pub mod engine;
 pub use engine::Vec101Engine;
 
+
 pub mod agent_cli;
+
 pub mod daemon;
 pub mod watcher;
 

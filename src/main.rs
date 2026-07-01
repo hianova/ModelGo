@@ -78,6 +78,7 @@ enum Commands {
     },
     /// Trigger the Scientific Discovery Loop (Chaos -> Decision -> Distillation -> Archive)
     Discovery,
+
 }
 
 fn main() -> anyhow::Result<()> {

@@ -3,7 +3,7 @@ use cdDB::{DualCacheFF, dualcache_ff};
 use std::sync::Arc;
 use std::time::Instant;
 
-type MotifCache = DualCacheFF<
+pub type MotifCache = DualCacheFF<
     u64,
     Arc<(usize, AsicCircuit)>,
     dualcache_ff::core::config::DefaultExponentialPolicy,
@@ -15,6 +15,47 @@ type MotifCache = DualCacheFF<
     1024,
     64,
 >;
+
+pub fn create_default_motif_cache() -> Arc<MotifCache> {
+    Arc::new(MotifCache::new())
+}
+
+pub struct TruthTableBuilder {
+    pub input_bits: usize,
+    pub output_bits: usize,
+}
+
+impl TruthTableBuilder {
+    pub fn new(input_bits: usize, output_bits: usize) -> Self {
+        Self { input_bits, output_bits }
+    }
+
+    /// `generator` receives the row index (0 to 2^input_bits - 1)
+    /// and returns the expected output as a u64.
+    pub fn generate<F>(self, generator: F) -> Vec<(Vec<bool>, Vec<bool>)>
+    where
+        F: Fn(u64) -> u64,
+    {
+        let total_rows = 1 << self.input_bits;
+        let mut table = Vec::with_capacity(total_rows);
+
+        for row in 0..total_rows {
+            let mut inputs = vec![false; self.input_bits];
+            for b in 0..self.input_bits {
+                inputs[self.input_bits - 1 - b] = (row >> b) & 1 == 1;
+            }
+            
+            let out_val = generator(row as u64);
+            let mut outputs = vec![false; self.output_bits];
+            for b in 0..self.output_bits {
+                outputs[self.output_bits - 1 - b] = (out_val >> b) & 1 == 1;
+            }
+            table.push((inputs, outputs));
+        }
+
+        table
+    }
+}
 use rayon::prelude::*;
 use std::cell::RefCell;
 
@@ -280,22 +321,36 @@ impl ScienceObjective<AsicCircuit> for AsicObjective {
             }
 
             let mut active_gate_count = 0;
+            let mut fan_out = vec![0u32; total_len];
+            let mut max_fan_out_penalty = 0;
+
             for (i, gate) in candidate.gates.iter().enumerate().rev() {
                 let gate_wire_idx = self.num_inputs + i;
                 if active_wires[gate_wire_idx] {
                     active_gate_count += 1;
                     active_wires[gate.left as usize] = true;
+                    fan_out[gate.left as usize] += 1;
+                    if fan_out[gate.left as usize] > 4 {
+                        max_fan_out_penalty += 2;
+                    }
+
                     if gate.op != GateOp::Not {
                         active_wires[gate.right as usize] = true;
+                        fan_out[gate.right as usize] += 1;
+                        if fan_out[gate.right as usize] > 4 {
+                            max_fan_out_penalty += 2;
+                        }
                     }
                 }
             }
 
-            // Allow "Junk DNA" (neutral mutations) to survive when searching for functional correctness
+            // Allow "Junk DNA" (neutral mutations) to survive when searching for functional correctness,
+            // but add a minor penalty for extreme bloat and Fan-Out physical limits.
             let reported_gates = if total_incorrect > 0 {
-                0 // Slingshot Effect: Zero penalty for active gates, allowing the circuit to temporarily bloat.
+                // 1 penalty point per 10 gates to avoid infinite memory bloat
+                (active_gate_count as u32 / 10) + max_fan_out_penalty 
             } else {
-                active_gate_count
+                active_gate_count as u32 + max_fan_out_penalty
             };
 
             (total_incorrect, reported_gates)

@@ -95,7 +95,7 @@ impl SpeculativeEngine {
                     }
                 };
 
-                let ctx = vec101_context {
+                let ctx = vec101_context { hardware_handle: std::ptr::null_mut(),
                     quant_type,
                     w_stream,
                     x_stream: self.x_stream.as_ptr(),
@@ -196,7 +196,7 @@ impl SpeculativeEngine {
                 ptrs.push(b.as_ptr());
             }
 
-            let ctx = vec101_context {
+            let ctx = vec101_context { hardware_handle: std::ptr::null_mut(),
                 quant_type,
                 w_stream,
                 x_stream: self.x_stream.as_ptr(),

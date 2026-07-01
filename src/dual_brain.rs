@@ -273,7 +273,7 @@ impl DualBrainRag {
         let bytes = query.as_bytes();
         let mode = if bytes.len() > 4 && bytes[0] == b'.' {
             LeftBrainMode::BiologyFolding
-        } else if embedded_db.len() > 0 && bytes.len() > 6 && bytes[0] == 0xE5 {
+        } else if !embedded_db.is_empty() && bytes.len() > 6 && bytes[0] == 0xE5 {
             // '尋' in UTF-8 starts with 0xE5
             LeftBrainMode::SemanticParsing
         } else {

@@ -64,8 +64,8 @@ fn main() {
     ];
 
     println!("\n[Phase 2 & 3] 交叉輪詢與自學習檢驗...");
-    let mut q_idx = 1;
-    for q in queries {
+    for (i, q) in queries.into_iter().enumerate() {
+        let q_idx = i + 1;
         let mut buf = arrayvec::ArrayString::<256>::new();
 
         let iters = 1000;
@@ -89,8 +89,8 @@ fn main() {
                 infer_time.as_nanos()
             );
         }
-        q_idx += 1;
     }
+
 
     println!("--------------------------------------------------");
     println!("✅ 所有的 ModelGo 目標與效能檢測皆順利通過！ (無限上下文、小模型自學習、極速效能)");

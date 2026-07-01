@@ -1,68 +1,10 @@
-use model_go::science::asic_objective::{AsicCircuit, AsicObjective, Gate, GateOp};
-use model_go::science::assembly_funnel::FunnelConfig;
-use model_go::science::{AssemblyFunnel, FunnelObserver};
+use model_go::science::assembly_funnel::{FunnelConfig, StandardObserver};
+use model_go::science::{AsicObjective, AssemblyFunnel};
+use model_go::science::asic_objective::{TruthTableBuilder, create_default_motif_cache, AsicCircuit, Gate, GateOp, MotifCache};
 use std::sync::Arc;
-
-use cdDB::DualCacheFF;
 use model_go::loader::ZeroCopyModelLoader;
 use model_go::speculative_engine::SpeculativeEngine;
 
-type MotifCache = DualCacheFF<
-    u64,
-    Arc<(usize, AsicCircuit)>,
-    cdDB::dualcache_ff::core::config::DefaultExponentialPolicy,
-    1024,
-    2048,
-    4096,
-    7168,
-    16,
-    1024,
-    64,
->;
-
-pub struct LogObserver {
-    best_seen: u32,
-    best_gates: u32,
-}
-
-impl FunnelObserver for LogObserver {
-    fn on_generation_complete(
-        &mut self,
-        _generation: u64,
-        _global_iters: u64,
-        best_fitness: (u32, u32),
-        _total_found: usize,
-    ) {
-        let (total_incorrect, active_gates) = best_fitness;
-
-        let should_log = if total_incorrect < self.best_seen {
-            self.best_seen = total_incorrect;
-            self.best_gates = active_gates;
-            true
-        } else if total_incorrect == self.best_seen && active_gates < self.best_gates {
-            self.best_gates = active_gates;
-            true
-        } else {
-            false
-        };
-
-        if should_log {
-            if total_incorrect == 0 {
-                println!(
-                    "\n[Pareto Archive] PERFECT LOGIC! -> Incorrect Bits: 0 | Active Gates: {}",
-                    active_gates
-                );
-            } else {
-                println!(
-                    "\n[Pareto Archive] Better Topology -> Incorrect Bits: {} | Active Gates: {}",
-                    total_incorrect, active_gates
-                );
-            }
-        }
-    }
-
-    fn on_archive_success(&mut self, _generation: u64, _global_iters: u64, _fitness: (u32, u32)) {}
-}
 
 const AES_SBOX: [u8; 256] = [
     0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
@@ -356,27 +298,12 @@ fn run_aes() {
     let _ = rayon::ThreadPoolBuilder::new()
         .stack_size(64 * 1024 * 1024)
         .build_global();
-    let mut truth_table = Vec::with_capacity(256);
 
     // Construct the AES S-Box truth table (8 bits to 8 bits)
-    for (i, &output_val) in AES_SBOX.iter().enumerate() {
-        let input_val = i as u8;
+    let truth_table = TruthTableBuilder::new(8, 8)
+        .generate(|row| AES_SBOX[row as usize] as u64);
 
-        let mut inputs = vec![false; 8];
-        let mut outputs = vec![false; 8];
-
-        for bit in 0..8 {
-            inputs[bit] = (input_val >> bit) & 1 == 1;
-            outputs[bit] = (output_val >> bit) & 1 == 1;
-        }
-
-        truth_table.push((inputs, outputs));
-    }
-
-    // We aim for < 113 gates. But we release the seal to 3000 gates for Phase 1 (Fat Search).
-    // The Two-Phase Annealing will automatically prune it down to < 200 in Phase 2.
-    // 8 inputs, 8 outputs.
-    let cached_motifs = Arc::new(MotifCache::new());
+    let cached_motifs = create_default_motif_cache();
 
     let mut objective = AsicObjective::new(8, 8, truth_table, 3000, cached_motifs.clone());
 
@@ -414,10 +341,7 @@ fn run_aes() {
     };
 
     let mut funnel = AssemblyFunnel::new(config);
-    let mut observer = LogObserver {
-        best_seen: 9999,
-        best_gates: 999999,
-    };
+    let mut observer = StandardObserver::new("[AES Synthesis]").with_generation_log(true);
 
     println!("============================================================");
     println!("🛡️ AES S-BOX SYNTHESIS : HACKER NEWS WORLD RECORD ATTEMPT 🛡️");

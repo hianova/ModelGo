@@ -168,6 +168,6 @@ fn main() {
         .serialize_value(&model_weights)
         .expect("Failed to serialize");
     let bytes = serializer.into_serializer().into_inner();
-    fs::write(&output_path, bytes).expect("Failed to save rkyv file");
+    fs::write(output_path, bytes).expect("Failed to save rkyv file");
     println!("Successfully saved zero-copy model to {}", output_path);
 }

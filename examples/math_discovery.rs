@@ -1,30 +1,6 @@
-use model_go::science::assembly_funnel::FunnelConfig;
-use model_go::science::{AssemblyFunnel, FunnelObserver, MathObjective};
-use std::io::Write;
+use model_go::science::assembly_funnel::{FunnelConfig, StandardObserver};
+use model_go::science::{AssemblyFunnel, MathObjective};
 use std::time::Instant;
-
-pub struct MathObserver;
-
-impl FunnelObserver for MathObserver {
-    fn on_generation_complete(
-        &mut self,
-        generation: u64,
-        global_iters: u64,
-        best_fitness: (u32, u32),
-        total_found: usize,
-    ) {
-        let iters_k = global_iters as f64 / 1_000.0;
-        print!(
-            "\r\x1b[2K[Math-Space] Gen: {} | Iters: {:.1}k | Gen Best (MSE, Len): {:?} | 💎 Laws Mined: {}",
-            generation, iters_k, best_fitness, total_found
-        );
-        std::io::stdout().flush().unwrap();
-    }
-
-    fn on_archive_success(&mut self, _generation: u64, _global_iters: u64, _fitness: (u32, u32)) {
-        // The output is printed inside MathObjective::check_archival
-    }
-}
 
 fn main() {
     println!("============================================================");
@@ -37,8 +13,11 @@ fn main() {
     println!("Target Physics Law (Hidden): Y = X^2 + 5X");
 
     let mut dataset = Vec::new();
-    for i in 1..=10 {
-        let x = i as f32;
+    // 最佳化邊界：涵蓋負數、零、正數與較大的範圍，確保能適應各種邊界情況
+    let boundaries = [
+        -100.0, -50.0, -10.0, -5.0, -2.0, -1.0, 0.0, 1.0, 2.0, 5.0, 10.0, 50.0, 100.0
+    ];
+    for &x in &boundaries {
         let y = x * x + 5.0 * x;
         dataset.push((x, y));
     }
@@ -58,7 +37,7 @@ fn main() {
     };
 
     let mut funnel = AssemblyFunnel::new(config);
-    let mut observer = MathObserver;
+    let mut observer = StandardObserver::new("[Math-Space]").with_generation_log(true);
 
     println!("Igniting Chaos Engine... Searching for Universal Mathematical Law.");
     funnel.run_evolution_loop(&objective, &mut observer);

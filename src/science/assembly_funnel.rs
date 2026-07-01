@@ -4,6 +4,12 @@ use std::time::Instant;
 
 /// Observer trait to decouple the engine from specific UI/Telemetry implementations (e.g. motionview_core).
 pub trait FunnelObserver: Send + Sync {
+    fn on_step(&mut self, msg: &str);
+    fn on_success(&mut self, msg: &str);
+    fn on_warning(&mut self, msg: &str);
+    fn on_error(&mut self, msg: &str);
+    fn confirm(&mut self, prompt: &str) -> bool;
+
     fn on_generation_complete(
         &mut self,
         generation: u64,
@@ -140,6 +146,9 @@ impl<T: Clone + Send + Sync> AssemblyFunnel<T> {
         let mut chaos_state = ChaosState::<10, 1>::new([0.0]);
 
         loop {
+            if self.config.stagnation_patience == 0 {
+                break;
+            }
             print!(
                 "\r\x1b[K[AssemblyFunnel] Starting generation {}...",
                 generation
@@ -434,5 +443,69 @@ impl<T: Clone + Send + Sync> AssemblyFunnel<T> {
                 stagnation_counter = 0;
             }
         }
+    }
+}
+
+pub struct StandardObserver {
+    prefix: String,
+    log_gen: bool,
+}
+
+impl StandardObserver {
+    pub fn new(prefix: &str) -> Self {
+        Self {
+            prefix: prefix.to_string(),
+            log_gen: false,
+        }
+    }
+    
+    pub fn with_generation_log(mut self, val: bool) -> Self {
+        self.log_gen = val;
+        self
+    }
+}
+
+impl FunnelObserver for StandardObserver {
+    fn on_step(&mut self, msg: &str) {
+        // Homebrew style step: ==> msg in blue bold
+        println!("{} \x1b[1;34m==>\x1b[0m \x1b[1m{}\x1b[0m", self.prefix, msg);
+    }
+
+    fn on_success(&mut self, msg: &str) {
+        // Homebrew style success: cigarette emoji + green
+        println!("{} 🚬  \x1b[1;32m{}\x1b[0m", self.prefix, msg);
+    }
+
+    fn on_warning(&mut self, msg: &str) {
+        // Homebrew style warning: yellow Warning:
+        println!("{} \x1b[1;33mWarning:\x1b[0m {}", self.prefix, msg);
+    }
+
+    fn on_error(&mut self, msg: &str) {
+        // Homebrew style error: red Error:
+        println!("{} \x1b[1;31mError:\x1b[0m {}", self.prefix, msg);
+    }
+
+    fn confirm(&mut self, prompt: &str) -> bool {
+        use std::io::Write;
+        print!("{} \x1b[1m{} [y/N]\x1b[0m ", self.prefix, prompt);
+        let _ = std::io::stdout().flush();
+        let mut input = String::new();
+        if std::io::stdin().read_line(&mut input).is_ok() {
+            let t = input.trim().to_lowercase();
+            t == "y" || t == "yes"
+        } else {
+            false
+        }
+    }
+
+    fn on_generation_complete(&mut self, generation: u64, global_iters: u64, _best_fitness: (u32, u32), total_found: usize) {
+        if self.log_gen {
+            self.on_step(&format!("Gen {} Complete. Iters: {}, Found: {}", generation, global_iters, total_found));
+        }
+    }
+    
+    fn on_archive_success(&mut self, generation: u64, _global_iters: u64, fitness: (u32, u32)) {
+        self.on_success(&format!("Archive Success! Gen: {}, Fitness: {:?}", generation, fitness));
     }
 }
